@@ -81,7 +81,7 @@ function hvVersion()
 function timeZoneCheck()
 {
     local GEOTZ=`curl -s http://ip-api.com/json | sed -r -e 's/.+"timezone":"([^"]+?)".+/\1/g'`
-    local CURTZ=`grep ZONE /etc/sysconfig/clock | cut -d'=' -f2 | tr -d '"'`
+    local CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}`
     ( [[ ${GEOTZ} != ${CURTZ} ]] && echo -e "${lred}Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}${nofo}" ) || echo -e "${lgreen}Timezones appear to match. ${cyan}${CURTZ}${nofo}"
 }
 
@@ -90,7 +90,7 @@ function checkHVBSStatus()
 {
     (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
     (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
-    (nc -z ${1} 161 2>&1 >/dev/null && echo -ne "|YES" ) || echo -ne "|NO"
+    (nc -c '' ${1} 161 2>&1 >/dev/null && echo -ne "|YES" ) || echo -ne "|NO"
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /onapp/onapp-store-install.version 2>/dev/null'" 2>/dev/null`
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'uname -r 2>/dev/null'" 2>/dev/null`
     echo -e "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /etc/redhat-release 2>/dev/null'" 2>/dev/null`
@@ -207,18 +207,18 @@ else
 fi
 
 
-if [ -r ${ASVA_TEMPLATE_DIR}/asva-template-url.list ] ; then
-	TMP_ISOS=`cat ${ASVA_TEMPLATE_DIR}/asva-template-url.list | sed -e 's#^.*/##g'`
-	for ISOS in $TMP_ISOS ; do
-		if [ -s ${ASVA_TEMPLATE_DIR}/${ISOS} ] ; then
-			echo "${ISOS} is found."
-		else
-			echo "${ISOS} is NOT found. Please run install script or download manually."
-		fi
-	done
-else
-	echo "Application Server template list does not exist. Please run install script."
-fi
+# if [ -r ${ASVA_TEMPLATE_DIR}/asva-template-url.list ] ; then
+	# TMP_ISOS=`cat ${ASVA_TEMPLATE_DIR}/asva-template-url.list | sed -e 's#^.*/##g'`
+	# for ISOS in $TMP_ISOS ; do
+		# if [ -s ${ASVA_TEMPLATE_DIR}/${ISOS} ] ; then
+			# echo "${ISOS} is found."
+		# else
+			# echo "${ISOS} is NOT found. Please run install script or download manually."
+		# fi
+	# done
+# else
+	# echo "Application Server template list does not exist. Please run install script."
+# fi
 
 
 if [ -r ${CDN_TEMPLATE_DIR}/cdn-template-url.list ] ; then
