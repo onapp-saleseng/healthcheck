@@ -65,6 +65,28 @@ function runCheckHVandBS()
 }
 
 
+function checkHVConn()
+{
+    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
+    for ip in $IPADDRS ; do
+	if [ ${1} == ${ip} ] ; then
+            continue
+        fi
+	su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo \"$1 can ping $ip\") || echo \"$1 Cannot ping $ip\"'"
+    done
+}
+
+function checkAllHVConn()
+{
+    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
+    for ip in $IPADDRS ; do
+        checkHVConn $ip
+    done
+}
+
+
 # Check control panel version
 function cpVersion()
 {
@@ -132,8 +154,6 @@ rootDiskSize
 # Check time zone
 timeZoneCheck
 
-echo "Pulling table of hypervisor information..."
-runCheckHVandBS | column -s '|' -t
 
 # Check on control server for recovery and LoadBalancer templates
 
@@ -238,3 +258,9 @@ fi
 
 
 
+echo "Pulling table of hypervisor information..."
+runCheckHVandBS | column -s '|' -t
+
+
+#check HV interconnectivity
+checkAllHVConn
