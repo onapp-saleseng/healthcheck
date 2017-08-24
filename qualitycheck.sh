@@ -29,7 +29,7 @@ CFG='/onapp/onapp-cp-install/onapp-cp-install.conf'
 if [ -r $CFG ] ; then
 	. $CFG
 else
-	echo -e "${red}CP Install Configuration file does not exist. \`yum install onapp-cp-install\` may not have been ran or the install script itself has not been ran.${nofo}"
+	echo -e "\n${red}CP Install Configuration file does not exist. \`yum install onapp-cp-install\` may not have been ran or the install script itself has not been ran.${nofo}"
 	exit 1;
 fi
 
@@ -62,7 +62,7 @@ function runSQL()
 # Run the checks on all hypervisors and backup servers, display table. just for status
 function runCheckHVandBS()
 {
-    echo -e "Label|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro"
+    echo -e "${lbrown}\nLabel|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro${cyan}"
 
     # hypervisors
     local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
@@ -83,24 +83,24 @@ function runCheckHVandBS()
         echo -ne "${CURLABEL}|${ip}"
         checkHVBSStatus ${ip}
     done
+
+    echo -ne "${nofo}"
 }
 
 
 function checkHVConn()
 {
-    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
     for ip in $IPADDRS ; do
 	if [ ${1} == ${ip} ] ; then
             continue
         fi
-	su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo -e \"${lgreen}$1 can ping $ip\") || echo -e \"${lred}$1 Cannot ping $ip\"'"
+	su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo -e \"${green}$1 can ping $ip\") || echo -e \"${lred}$1 Cannot ping $ip\"'"
     done
 }
 
 function checkAllHVConn()
 {
-    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
     for ip in $IPADDRS ; do
         checkHVConn $ip
@@ -110,15 +110,53 @@ function checkAllHVConn()
 
 checkISConn()
 {
-    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     local HOSTIDS=`runSQL "SELECT host_id FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     for ip in $IPADDRS ; do
         for hosts in $HOSTIDS ; do
-            su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -e \"${lgreen}${ip} can ping 10.200.${hosts}.254\") || echo -e \"${lred}${ip} Cannot ping 10.200.${hosts}.254\"'"
+            su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -e \"${green}${ip} can ping 10.200.${hosts}.254\") || echo -e \"${lred}${ip} Cannot ping 10.200.${hosts}.254\"'"
         done
     done
     echo -e ${nofo}
+}
+
+
+checkNetZones()
+{
+    local NJIDS=`runSQL "SELECT network_id FROM networking_network_joins WHERE target_join_id=${1}"`
+    if [ "x${NJIDS}" == "x" ] ; then echo -e "${lred}No Networks Joined!${nofo}" ; fi
+    for CURNID in ${NJIDS} ; do
+        echo -e "Network Join:${green} " `runSQL "SELECT label FROM networking_networks WHERE id=${CURNID}"` "${nofo}"
+    done
+}
+
+checkDataZones()
+{
+    local DZJIDS=`runSQL "SELECT data_store_id FROM data_store_joins WHERE target_join_id=${1}"`
+    if [ "x${DZJIDS}" == "x" ] ; then echo -e "${lred}No Data Stores Joines!${nofo}" ; fi
+    for CURDID in ${DZJIDS} ; do
+        echo -e "Data Store Join:${green} " `runSQL "SELECT label FROM data_stores WHERE id=${CURDID}"` "${nofo}"
+    done
+}
+
+checkBackupJoin()
+{
+    local BSJIDS=`runSQL "SELECT backup_server_id FROM backup_server_joins WHERE target_join_id=${1}"`
+    if [ "x${BSJIDS}" == "x" ] ; then echo -e "${purp}No Backup Servers Joined${nofo}" ; fi
+    for CURBID in ${BSJIDS} ; do
+        echo -e "Backup Server Join: ${green}" `runSQL "SELECT label FROM backup_servers WHERE id=${CURBID}"` "${nofo}"
+    done
+}
+
+checkComputeZones()
+{
+    local CZ=`runSQL "SELECT id FROM packs WHERE type='HypervisorGroup'"`
+    for CURID in ${CZ} ; do
+        echo -e "Checking Compute Zone:${cyan}" `runSQL "SELECT label FROM packs WHERE id=${CURID}"` "${nofo}"
+        checkNetZones ${CURID}
+        checkDataZones ${CURID}
+        checkBackupJoin ${CURID}
+    done
 }
 
 
@@ -166,12 +204,15 @@ function resourceCheck()
 function rootDiskSize()
 {
     # 100GB * 1024 * 1024 = 104857600 KB
-    ( [ `df -l -P / | tail -1 | awk {'print $2'}` -ge 104857600 ] && echo -e "${lgreen}Disk over 100GB${nofo}" ) || echo -e "${lred}Disk under 100GB${nofo}"
+    ( [ `df -l -P -BG / | tail -1 | awk {'print $2'} | tr -d G` -ge 100 ] && echo -e "${lgreen}Disk over 100GB${nofo}" ) || echo -e "${lred}Disk under 100GB${nofo}"
 }
 
 
 
-
+echo "-------------------------------------"
+echo "OnApp Enterprise Quality Check Script"
+echo "-------------------------------------"
+echo 
 
 # Control Panel Version, store for later comparison.
 CP_OA_VERSION=`cpVersion`
@@ -189,6 +230,9 @@ rootDiskSize
 # Check time zone
 timeZoneCheck
 
+echo -e "\n\n"
+sleep 1.0
+
 
 # Check on control server for recovery and LoadBalancer templates
 
@@ -196,7 +240,7 @@ if [ -r ${FREEBSD_ISO_DIR}/freebsd-iso-url.list ] ; then
 	TMP_ISOS=`cat ${FREEBSD_ISO_DIR}/freebsd-iso-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${FREEBSD_ISO_DIR}/${ISOS} ] ; then
-			echo -e "${lgreen}${ISOS} is found."
+			echo -e "${green}${ISOS} is found."
 		else
 			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
@@ -210,7 +254,7 @@ if [ -r ${GRUB_ISO_DIR}/grub-isos-url.list ] ; then
 	TMP_ISOS=`cat ${GRUB_ISO_DIR}/grub-isos-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${GRUB_ISO_DIR}/${ISOS} ] ; then
-			echo -e "${lgreen}Grub image has been found."
+			echo -e "${green}Grub image ${ISOS} has been found."
 		else
 			echo -e "${lred}Grub image ${ISOS} has NOT been found. Please run install script or download manually."
 		fi
@@ -224,7 +268,7 @@ if [ -r ${RECOVERY_TEMPLATES_DIR}/recovery-templates-url.list ] ; then
 	TMP_ISOS=`cat ${RECOVERY_TEMPLATES_DIR}/recovery-templates-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${RECOVERY_TEMPLATES_DIR}/${ISOS} ] ; then
-			echo -e "${lgreen}${ISOS} is found."
+			echo -e "${green}${ISOS} is found."
 		else
 			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
@@ -238,7 +282,7 @@ if [ -r ${WINDOWS_SMART_DRIVERS_DIR} ] ; then
 	TMP_ISOS=`cat ${WINDOWS_SMART_DRIVERS_DIR}/windows-smart-drivers-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${WINDOWS_SMART_DRIVERS_DIR}/${ISOS} ] ; then
-			echo -e "${lgreen}${ISOS} is found."
+			echo -e "${green}${ISOS} is found."
 		else
 			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
@@ -252,7 +296,7 @@ if [ -r ${LB_TEMPLATE_DIR}/lbva-template-url.list ] ; then
 	TMP_ISOS=`cat ${LB_TEMPLATE_DIR}/lbva-template-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do 
 		if [ -s ${LB_TEMPLATE_DIR}/${ISOS} ] ; then
-			echo -e "${lgreen}${ISOS} is found."
+			echo -e "${green}${ISOS} is found."
 		else
 			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
@@ -280,9 +324,9 @@ if [ -r ${CDN_TEMPLATE_DIR}/cdn-template-url.list ] ; then
 	TMP_ISOS=`cat ${CDN_TEMPLATE_DIR}/cdn-template-url.list | sed -r 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${CDN_TEMPLATE_DIR}/${ISOS} ] ; then
-			echo -e "${lgreen}${ISOS} is found."
+			echo -e "${green}CDN Template ${ISOS} is found."
 		else
-			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "${lred}CDN Template ${ISOS} is NOT found. Please run install script or download manually."
 		fi
 	done
 else
@@ -300,3 +344,6 @@ runCheckHVandBS | column -s '|' -t
 #check HV interconnectivity
 checkAllHVConn
 checkISConn
+
+
+checkComputeZones
