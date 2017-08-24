@@ -2,13 +2,34 @@
 
 # Script for automatically checking integrity of OnApp installations
 
+# Colors
+nofo='\e[0m'      #Regular
+bold='\e[1m'      #Regular bold
+grey='\e[30m'     #Grey
+red='\e[31m'      #Red
+green='\e[32m'    #Green
+brown='\e[33m'    #Brown
+blue='\e[34m'     #Blue
+purp='\e[35m'     #Purple
+cyan='\e[36m'     #Cyan
+white='\e[37m'    #White
+whiteb='\e[1;37m' #White Bold
+lgrey='\e[1;30m'  #Light Grey
+lred='\e[1;31m'   #Light Red
+lgreen='\e[1;32m' #Light Green
+lbrown='\e[1;33m' #Light Brown
+lblue='\e[1;34m'  #Light Blue
+lpurp='\e[1;35m'  #Light Purple
+lcyan='\e[1;36m'  #Light Cyan
+###
+
 # Check for and include the install config file
 CFG='/onapp/onapp-cp-install/onapp-cp-install.conf'
 
 if [ -r $CFG ] ; then
 	. $CFG
 else
-	echo 'CP Install Configuration file does not exist. `yum install onapp-cp-install` may not have been ran or the install script itself has not been ran.'
+	echo -e "${red}CP Install Configuration file does not exist. \`yum install onapp-cp-install\` may not have been ran or the install script itself has not been ran.${nofo}"
 	exit 1;
 fi
 
@@ -33,7 +54,7 @@ SQLP=`grep password ${DBCONF} | head -1 | awk {'print $2'} | sed "s/'$//g;s/^'//
 # Run a SQL query
 function runSQL()
 {
-    [ $# -ne 1 ] && echo "Invalid or empty SQL Query!" >&2 && exit 1
+    [ $# -ne 1 ] && echo -e "${red}Invalid or empty SQL Query!${nofo}" >&2 && exit 1
     local result=`mysql -h ${SQLH} -u ${SQLU} -p${SQLP} ${DBNAME} -Bse "${1}"`
     echo "${result}";
 }
@@ -86,6 +107,19 @@ function checkAllHVConn()
     done
 }
 
+checkISConn()
+{
+    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    local HOSTIDS=`runSQL "SELECT host_id FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    for ip in $IPADDRS ; do
+        for hosts in $HOSTIDS ; do
+            su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -e \"${lgreen}${ip} can ping 10.200.${hosts}.254\") || echo -e \"${lred}${ip} Cannot ping 10.200.${hosts}.254\"'"
+        done
+    done
+    echo -e ${nofo}
+}
+
 
 # Check control panel version
 function cpVersion()
@@ -104,15 +138,15 @@ function timeZoneCheck()
 {
     local GEOTZ=`curl -s http://ip-api.com/json | sed -r -e 's/.+"timezone":"([^"]+?)".+/\1/g'`
     local CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}`
-    ( [[ ${GEOTZ} != ${CURTZ} ]] && echo -e "${lred}Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}${nofo}" ) || echo -e "${lgreen}Timezones appear to match. ${cyan}${CURTZ}${nofo}"
+    ( [[ ${GEOTZ} != ${CURTZ} ]] && echo -e "${purp}Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}${nofo}" ) || echo -e "${lgreen}Timezones appear to match. ${cyan}${CURTZ}${nofo}"
 }
 
 # Check HV or BS status from control server
 function checkHVBSStatus()
 {
-    (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
-    (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
-    (nc -c '' ${1} 161 2>&1 >/dev/null && echo -ne "|YES" ) || echo -ne "|NO"
+    (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|${lgreen}YES${nofo}") || echo -ne "|${lred}NO${nofo}"
+    (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|${lgreen}YES${nofo}") || echo -ne "|${lgreen}NO${nofo}"
+    (nc -c '' ${1} 161 2>&1 >/dev/null && echo -ne "|${lgreen}YES${nofo}" ) || echo -ne "|${lred}NO${nofo}"
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /onapp/onapp-store-install.version 2>/dev/null'" 2>/dev/null`
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'uname -r 2>/dev/null'" 2>/dev/null`
     echo -e "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /etc/redhat-release 2>/dev/null'" 2>/dev/null`
@@ -161,13 +195,13 @@ if [ -r ${FREEBSD_ISO_DIR}/freebsd-iso-url.list ] ; then
 	TMP_ISOS=`cat ${FREEBSD_ISO_DIR}/freebsd-iso-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${FREEBSD_ISO_DIR}/${ISOS} ] ; then
-			echo "${ISOS} is found."
+			echo -e "${lgreen}${ISOS} is found."
 		else
-			echo "${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
 	done
 else
-	echo "FreeBSD ISO URL list does not exist. Please run install script."
+	echo -e "${red}FreeBSD ISO URL list does not exist. Please run install script."
 fi
 
 
@@ -175,13 +209,13 @@ if [ -r ${GRUB_ISO_DIR}/grub-isos-url.list ] ; then
 	TMP_ISOS=`cat ${GRUB_ISO_DIR}/grub-isos-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${GRUB_ISO_DIR}/${ISOS} ] ; then
-			echo "Grub image has been found."
+			echo -e "${lgreen}Grub image has been found."
 		else
-			echo "Grub image ${ISOS} has NOT been found. Please run install script or download manually."
+			echo -e "${lred}Grub image ${ISOS} has NOT been found. Please run install script or download manually."
 		fi
 	done
 else
-	echo "Grub ISO URL list does not exist. Please run install script."
+	echo -e "${red}Grub ISO URL list does not exist. Please run install script."
 fi
 
 
@@ -189,13 +223,13 @@ if [ -r ${RECOVERY_TEMPLATES_DIR}/recovery-templates-url.list ] ; then
 	TMP_ISOS=`cat ${RECOVERY_TEMPLATES_DIR}/recovery-templates-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${RECOVERY_TEMPLATES_DIR}/${ISOS} ] ; then
-			echo "${ISOS} is found."
+			echo -e "${lgreen}${ISOS} is found."
 		else
-			echo "${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
 	done
 else
-	echo "Recovery Template list does not exist. Please run install script."
+	echo -e "${red}Recovery Template list does not exist. Please run install script."
 fi
 
 
@@ -203,13 +237,13 @@ if [ -r ${WINDOWS_SMART_DRIVERS_DIR} ] ; then
 	TMP_ISOS=`cat ${WINDOWS_SMART_DRIVERS_DIR}/windows-smart-drivers-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${WINDOWS_SMART_DRIVERS_DIR}/${ISOS} ] ; then
-			echo "${ISOS} is found."
+			echo -e "${lgreen}${ISOS} is found."
 		else
-			echo "${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
 	done
 else
-	echo "Windows Smart Drivers list does not exist. Please run install script."
+	echo -e "${red}Windows Smart Drivers list does not exist. Please run install script."
 fi
 
 
@@ -217,13 +251,13 @@ if [ -r ${LB_TEMPLATE_DIR}/lbva-template-url.list ] ; then
 	TMP_ISOS=`cat ${LB_TEMPLATE_DIR}/lbva-template-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do 
 		if [ -s ${LB_TEMPLATE_DIR}/${ISOS} ] ; then
-			echo "${ISOS} is found."
+			echo -e "${lgreen}${ISOS} is found."
 		else
-			echo "${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
 	done
 else
-	echo "Load Balancer template list does not exist.  Please run install script."
+	echo -e "${red}Load Balancer template list does not exist.  Please run install script."
 fi
 
 
@@ -245,16 +279,16 @@ if [ -r ${CDN_TEMPLATE_DIR}/cdn-template-url.list ] ; then
 	TMP_ISOS=`cat ${CDN_TEMPLATE_DIR}/cdn-template-url.list | sed -r 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${CDN_TEMPLATE_DIR}/${ISOS} ] ; then
-			echo "${ISOS} is found."
+			echo -e "${lgreen}${ISOS} is found."
 		else
-			echo "${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
 		fi
 	done
 else
-	echo "CDN template list does not exist. Please run install script."
+	echo -e "${red}CDN template list does not exist. Please run install script."
 fi
 
-
+echo -e "${nofo}"
 
 
 
@@ -264,3 +298,4 @@ runCheckHVandBS | column -s '|' -t
 
 #check HV interconnectivity
 checkAllHVConn
+checkISConn
