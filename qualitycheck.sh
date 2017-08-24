@@ -94,7 +94,7 @@ function checkHVConn()
 	if [ ${1} == ${ip} ] ; then
             continue
         fi
-	su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo \"$1 can ping $ip\") || echo \"$1 Cannot ping $ip\"'"
+	su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo -e \"${lgreen}$1 can ping $ip\") || echo -e \"${lred}$1 Cannot ping $ip\"'"
     done
 }
 
@@ -105,6 +105,7 @@ function checkAllHVConn()
     for ip in $IPADDRS ; do
         checkHVConn $ip
     done
+    echo -e "${nofo}"
 }
 
 checkISConn()
@@ -144,9 +145,9 @@ function timeZoneCheck()
 # Check HV or BS status from control server
 function checkHVBSStatus()
 {
-    (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|${lgreen}YES${nofo}") || echo -ne "|${lred}NO${nofo}"
-    (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|${lgreen}YES${nofo}") || echo -ne "|${lgreen}NO${nofo}"
-    (nc -c '' ${1} 161 2>&1 >/dev/null && echo -ne "|${lgreen}YES${nofo}" ) || echo -ne "|${lred}NO${nofo}"
+    (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
+    (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
+    (nc -c '' ${1} 161 2>&1 >/dev/null && echo -ne "|YES" ) || echo -ne "|NO"
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /onapp/onapp-store-install.version 2>/dev/null'" 2>/dev/null`
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'uname -r 2>/dev/null'" 2>/dev/null`
     echo -e "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /etc/redhat-release 2>/dev/null'" 2>/dev/null`
