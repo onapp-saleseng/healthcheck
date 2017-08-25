@@ -200,10 +200,17 @@ createDestroyVM()
     if [[ "x${VM_ID}" == "x" ]] ; then echo "An issue occurred creating the virtual machine. Please attempt manually or resolve any previous issues." && exit 1 ; fi
     VM_ONLINE=0
     echo "Watching for virtual machine (ID ${VM_ID}) to come online..."
+    COUNT=0
     while [ ${VM_ONLINE} -eq 0 ] ; do
-        local result=`runSQL "SELECT booted FROM virtual_machines WHERE id=${VM_ID}" | tr -dc '0-9'`
-        if [[ ${result}  == "1" ]] ; then echo -e "Virtual machine is marked as ${green}booted${nofo}." ; VM_ONLINE=1 ; fi
-        sleep 10
+        # local result=`runSQL "SELECT booted FROM virtual_machines WHERE id=${VM_ID}" | tr -dc '0-9'`
+        local result=`curl -s -i -X GET -H 'Accept: application/xml' -H 'Content-type: application/xml' -u ${1}:${2} --url http://localhost/virtual_machines/${VM_ID}/status.xml | sed -r -e 's/> </>\n</g'`
+        local VM_STATUS=`echo ${result} | grep state | sed -r -e 's/.+?state>([a-z]+)<.+?/\1/g'`
+        if [[ "${VM_STATUS}" == "delivered" ]] ; then echo -e "Virtual machine is marked as ${green}booted${nofo}." ; VM_ONLINE=1 ; fi
+        let "COUNT += 1"
+        if [ ${COUNT} -gt 9 ] ; then
+            if [[ "${VM_STATUS}" == "failed" ]] ; then echo -e "Virtual machine build has ${red}failed.${nofo} Please recheck template and correct setup" ; VM_ONLINE=1; fi
+        fi
+        sleep 5
     done
 
     echo "Destroying virtual machine."
@@ -213,13 +220,23 @@ createDestroyVM()
     local result=`$QUERY`
 
     echo "Watching for virtual machine to be destroyed"
+    COUNT=0
     while [ ${VM_ONLINE} -eq 1 ] ; do
         local result=`runSQL "SELECT deleted_at FROM virtual_machines WHERE id=${VM_ID}"`
+        #local result=`curl -s -i -X GET -H 'Accept: application/xml' -H 'Content-type: application/xml' -u ${1}:${2} --url http://localhost/virtual_machines/${VM_ID}/status.xml | sed -r -e 's/> </>\n</g'`
+        #local VM_STATUS=`echo ${result} | grep state | sed -r -e 's/.+?state>([a-z]+)<.+?/\1/g'`
+        #COUNT=${COUNT}+1
+        let "COUNT += 1"
         if [[ ${result} != "NULL" ]] ; then
             echo "Virtual machine appears to have been destroyed."
             VM_ONLINE=2
+        #else
+            #if [ ${COUNT} -gt 19 ] ; then
+            #    echo "Checking for failure..."
+                #Magic for detecting failure
+            #fi
         fi
-        sleep 5
+        sleep 2
     done
 }
 

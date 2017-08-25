@@ -67,8 +67,8 @@ Template ID: 4 , Template Label: CentOS 6.0 x64
 Template ID: 5 , Template Label: Ubuntu 14.10 x64
 
 Provide template ID: 5
-Watching for virtual machine (ID 16) to come online...
-Virtual machine is marked as booted.
+Watching for virtual machine (ID 24) to come online...
+Virtual machine build has failed. Please recheck template and correct setup
 Destroying virtual machine.
 Watching for virtual machine to be destroyed
 Virtual machine appears to have been destroyed.
