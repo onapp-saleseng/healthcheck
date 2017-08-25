@@ -2,17 +2,18 @@
 
 # Script for automatically checking integrity of OnApp installations
 API_CALLS=0
-while [[ $# -gt 1 ]] ; do
+while [[ $# -gt 0 ]] ; do
     key=$1
     case $key in
         -a|--api)
         API_CALLS=1
+        echo "API Calls for creating VM's are enabled. Will process after all checks."
+        sleep 1
         shift
         ;;
     esac
     shift
 done
-
 # Colors
 nofo='\e[0m'      #Regular
 bold='\e[1m'      #Regular bold
@@ -69,6 +70,7 @@ function runSQL()
     local result=`mysql -h ${SQLH} -u ${SQLU} -p${SQLP} ${DBNAME} -Bse "${1}"`
     echo "${result}";
 }
+
 
 # Run the checks on all hypervisors and backup servers, display table. just for status
 function runCheckHVandBS()
@@ -170,10 +172,56 @@ checkComputeZones()
     done
 }
 
-#createDestroyVM()
-#{
+createDestroyVM()
+{
   # API Calls for creating a VM and then destroying it if possible.
-#}
+    local TEMPLATE_IDS=`runSQL "SELECT t.id FROM template_groups AS tg JOIN relation_group_templates AS tjn ON image_template_group_id=tg.id JOIN templates t ON t.id=tjn.template_id WHERE tg.system_group=0;"`
+    if [[ `echo -n ${TEMPLATE_IDS} | wc -m` -eq 1 ]] ; then
+        echo "Found one template ID ${TEMPLATE_IDS}, Label: "`runSQL "SELECT label FROM templates WHERE id=${TEMPLATE_IDS}"`
+        TEMPLATE_ID=${TEMPLATE_IDS}
+    else
+        echo "Found multiple non-system templates. Which one should I use?"
+        for CURID in $TEMPLATE_IDS ; do
+            echo "Template ID: ${CURID} , Template Label: "`runSQL "SELECT label FROM templates WHERE id=${CURID}"`
+        done
+        echo -ne "\nProvide template ID: "
+        read TEMPLATE_ID
+        TEMPLATE_ID=`echo ${TEMPLATE_ID} | tr -dc '0-9'`
+    fi
+    if [ "x${TEMPLATE_ID}" == "x" ] ; then echo "Template ID is BLANK! Exiting..." && exit 1 ; fi
+    local MIN_RAM="`runSQL "SELECT min_memory_size FROM templates WHERE id=${TEMPLATE_ID}"`"
+    local MIN_P_DISK="`runSQL "SELECT min_disk_size FROM templates WHERE id=${TEMPLATE_ID}"`"
+    local XML_REQ="<virtual_machine><template_id>${TEMPLATE_ID}</template_id><label>QATest</label><hostname>qatest</hostname><cpus>1</cpus><cpu_shares>100</cpu_shares><memory>${MIN_RAM}</memory><primary_disk_size>${MIN_P_DISK}</primary_disk_size><required_ip_address_assignment>1</required_ip_address_assignment><required_virtual_machine_build>1</required_virtual_machine_build><required_virtual_machine_startup>1</required_virtual_machine_startup></virtual_machine>"
+    local QUERY=`curl -s -i -X POST -H 'Accept: application/xml' -H 'Content-type: application/xml' -u ${1}:${2} -d "${XML_REQ}" --url http://localhost/virtual_machines.xml`
+    local result=$QUERY
+    local VM_IDENT=`echo $result | sed -r -e 's/> </>\n</g' | grep -e '<identifier>' -m1 | sed -r -e 's/.+?>([a-z]+)<.+?/\1/'`
+    local VM_ID=`echo $result | sed -r -e 's/> </>\n</g' | grep -e '<id type' -m1 | sed -r -e 's/.+?>([0-9]+)<.+?/\1/'`
+    sleep 5
+    if [[ "x${VM_ID}" == "x" ]] ; then echo "An issue occurred creating the virtual machine. Please attempt manually or resolve any previous issues." && exit 1 ; fi
+    VM_ONLINE=0
+    echo "Watching for virtual machine (ID ${VM_ID}) to come online..."
+    while [ ${VM_ONLINE} -eq 0 ] ; do
+        local result=`runSQL "SELECT booted FROM virtual_machines WHERE id=${VM_ID}" | tr -dc '0-9'`
+        if [[ ${result}  == "1" ]] ; then echo -e "Virtual machine is marked as ${green}booted${nofo}." ; VM_ONLINE=1 ; fi
+        sleep 10
+    done
+
+    echo "Destroying virtual machine."
+    sleep 5
+
+    local QUERY="curl -s -i -X DELETE -u ${1}:${2} http://localhost/virtual_machines/${VM_ID}.xml?convert_last_backup=0&destroy_all_backups=1"
+    local result=`$QUERY`
+
+    echo "Watching for virtual machine to be destroyed"
+    while [ ${VM_ONLINE} -eq 1 ] ; do
+        local result=`runSQL "SELECT deleted_at FROM virtual_machines WHERE id=${VM_ID}"`
+        if [[ ${result} != "NULL" ]] ; then
+            echo "Virtual machine appears to have been destroyed."
+            VM_ONLINE=2
+        fi
+        sleep 5
+    done
+}
 
 # Check control panel version
 function cpVersion()
@@ -384,10 +432,13 @@ checkComputeZones
 
 
 if [ ${API_CALLS} -eq 1 ] ; then
+  echo '----------------------------'
+  echo -e '\n'
+  echo "API Calls are enabled but require a username and password."
   echo -n "Please provide administrator username: "
   read API_USER
   echo -n "Please provide password for this user: "
   read -s API_PASS
-
+  echo
   createDestroyVM ${API_USER} ${API_PASS}
 fi

@@ -3,7 +3,7 @@
 ### What is this repository for? ###
 
 * An automated quality assurance/validation script for OnApp Enterprise Deployments
-* Ver 0.1.1
+* Ver 0.2
 
 ### What does this script do? ###
 
@@ -16,6 +16,10 @@
 * (0.1) Has color all over.
 * (0.1.1) Checks CPU of CP and HV's
 * (0.1.1) Added output example file
+* (0.2) Added creating and destroying a VM as a check (with the -a flag)
+
+### TO DO ###
+* Include some failure detection for VM creation and deletion. Currently will wait forever if it fails to provision. (0.2)
 
 ### How do I get set up? ###
 
