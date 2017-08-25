@@ -3,7 +3,7 @@
 ### What is this repository for? ###
 
 * An automated quality assurance/validation script for OnApp Enterprise Deployments
-* Ver 0.1
+* Ver 0.1.1
 
 ### What does this script do? ###
 
@@ -14,6 +14,8 @@
 * Checks connectivity between Compute Resources over the storage network
 * (0.1) Checks network, data store, and backup server joins for each compute zone
 * (0.1) Has color all over.
+* (0.1.1) Checks CPU of CP and HV's
+* (0.1.1) Added output example file
 
 ### How do I get set up? ###
 

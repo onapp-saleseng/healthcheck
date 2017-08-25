@@ -1,6 +1,17 @@
 #!/bin/bash
 
 # Script for automatically checking integrity of OnApp installations
+API_CALLS=0
+while [[ $# -gt 1 ]] ; do
+    key=$1
+    case $key in
+        -a|--api)
+        API_CALLS=1
+        shift
+        ;;
+    esac
+    shift
+done
 
 # Colors
 nofo='\e[0m'      #Regular
@@ -90,7 +101,7 @@ function runCheckHVandBS()
 
 function checkHVConn()
 {
-    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
+    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     for ip in $IPADDRS ; do
 	if [ ${1} == ${ip} ] ; then
             continue
@@ -101,7 +112,7 @@ function checkHVConn()
 
 function checkAllHVConn()
 {
-    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
+    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     for ip in $IPADDRS ; do
         checkHVConn $ip
     done
@@ -159,6 +170,10 @@ checkComputeZones()
     done
 }
 
+#createDestroyVM()
+#{
+  # API Calls for creating a VM and then destroying it if possible.
+#}
 
 # Check control panel version
 function cpVersion()
@@ -200,6 +215,21 @@ function resourceCheck()
     echo "${CPUMODEL},${CPUSPEED},${CPUCORES}"
 }
 
+function checkHVHW()
+{
+    echo -e "HV,CPU Model,CPU MHz,CPU Cores${cyan}"
+    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    for ip in $IPADDRS ; do
+        local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
+        LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
+        echo -ne "${CURLABEL}"
+        echo -ne ","`su onapp -c 'grep model\ name /proc/cpuinfo -m1 | cut -d":" -f2'` 
+        echo -ne ","`su onapp -c 'grep cpu\ MHz /proc/cpuinfo -m1 | cut -d":" -f2 | cut -d"." -f1 | tr -d " "'` 
+        echo -e ","`su onapp -c 'grep cpu\ cores /proc/cpuinfo -m1 | cut -d":" -f2 | tr -d " "'`
+    done
+}
+
 # Detect if root disk is over 100GB, for static hypervisors and control panel
 function rootDiskSize()
 {
@@ -216,13 +246,16 @@ echo
 
 # Control Panel Version, store for later comparison.
 CP_OA_VERSION=`cpVersion`
-echo "OnApp Control Panel Version ${CP_OA_VERSION}."
+echo -e "OnApp Control Panel Version ${lbrown}${CP_OA_VERSION}${nofo}."
 
 # Kernel and distro for control server
 CP_K_VERSION=`uname -r 2>/dev/null`
 CP_DISTRO=`cat /etc/redhat-release 2>/dev/null`
-echo "Kernel Release ${CP_K_VERSION}"
-echo "Distribution: ${CP_DISTRO}"
+echo -e "Kernel Release ${lbrown}${CP_K_VERSION}${nofo}"
+echo -e "Distribution: ${lbrown}${CP_DISTRO}${nofo}"
+
+CPUTABLE="\nCPU Model,CPU MHz,CPU Cores\n`resourceCheck`"
+echo -e "${CPUTABLE}" | column -s ',' -t
 
 # Check / disk size for >=100GB
 rootDiskSize
@@ -230,10 +263,7 @@ rootDiskSize
 # Check time zone
 timeZoneCheck
 
-echo -e "\n\n"
 sleep 1.0
-
-
 # Check on control server for recovery and LoadBalancer templates
 
 if [ -r ${FREEBSD_ISO_DIR}/freebsd-iso-url.list ] ; then
@@ -340,10 +370,24 @@ echo -e "${nofo}"
 echo "Pulling table of hypervisor information..."
 runCheckHVandBS | column -s '|' -t
 
+echo -e "Checking hardware...${lbrown}"
+checkHVHW | column -s ',' -t -c4
+echo -e "${nofo}"
+
 
 #check HV interconnectivity
 checkAllHVConn
 checkISConn
 
-
 checkComputeZones
+
+
+
+if [ ${API_CALLS} -eq 1 ] ; then
+  echo -n "Please provide administrator username: "
+  read API_USER
+  echo -n "Please provide password for this user: "
+  read -s API_PASS
+
+  createDestroyVM ${API_USER} ${API_PASS}
+fi
