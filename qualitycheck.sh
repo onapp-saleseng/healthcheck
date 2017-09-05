@@ -257,7 +257,8 @@ function timeZoneCheck()
 {
     local GEOTZ=`curl -s http://ip-api.com/json | sed -r -e 's/.+"timezone":"([^"]+?)".+/\1/g'`
     local CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}`
-    ( [[ ${GEOTZ} != ${CURTZ} ]] && echo -e "${purp}Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}${nofo}" ) || echo -e "${lgreen}Timezones appear to match. ${cyan}${CURTZ}${nofo}"
+    ( [[ ${GEOTZ} != ${CURTZ} ]] && echo -e "${lbrown}[?]${nofo} Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}" ) \
+	 || echo -e "${lgreen}[+]${nofo} Timezones appear to match: ${CURTZ}${nofo}"
 }
 
 # Check HV or BS status from control server
@@ -299,15 +300,28 @@ function checkHVHW()
 function rootDiskSize()
 {
     # 100GB * 1024 * 1024 = 104857600 KB
-    ( [ `df -l -P -BG / | tail -1 | awk {'print $2'} | tr -d G` -ge 100 ] && echo -e "${lgreen}Disk over 100GB${nofo}" ) || echo -e "${lred}Disk under 100GB${nofo}"
+    ( [ `df -l -P -BG / | tail -1 | awk {'print $2'} | tr -d G` -ge 100 ] && echo -e "${lgreen}[+]${nofo} Disk over 100GB" ) || echo -e "${lred}[-]${nofo} Disk under 100GB"
 }
 
 
+
+
+###############################################
+###############################################
+###############################################
+###############################################
+##### Action starts here, functions above #####
+###############################################
+###############################################
+###############################################
+###############################################
 
 echo "-------------------------------------"
 echo "OnApp Enterprise Quality Check Script"
 echo "-------------------------------------"
 echo 
+echo "Systems Information:"
+echo
 
 # Control Panel Version, store for later comparison.
 CP_OA_VERSION=`cpVersion`
@@ -322,26 +336,32 @@ echo -e "Distribution: ${lbrown}${CP_DISTRO}${nofo}"
 CPUTABLE="\nCPU Model,CPU MHz,CPU Cores\n`resourceCheck`"
 echo -e "${CPUTABLE}" | column -s ',' -t
 
-# Check / disk size for >=100GB
-rootDiskSize
-
-# Check time zone
-timeZoneCheck
-
 sleep 1.0
-# Check on control server for recovery and LoadBalancer templates
 
+echo
+echo "Pulling table of hypervisor information..."
+runCheckHVandBS | column -s '|' -t
+
+echo -e "Checking hardware...${lbrown}"
+checkHVHW | column -s ',' -t -c4
+echo -e "${nofo}"
+
+# Check on control server for recovery and LoadBalancer templates
+TEMP_FAIL=0
 if [ -r ${FREEBSD_ISO_DIR}/freebsd-iso-url.list ] ; then
 	TMP_ISOS=`cat ${FREEBSD_ISO_DIR}/freebsd-iso-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${FREEBSD_ISO_DIR}/${ISOS} ] ; then
-			echo -e "${green}${ISOS} is found."
+			#echo -e "${green}${ISOS} is found."
+			:
 		else
-			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "\t${lred}FreeBSD ${ISOS} is NOT found.${nofo}"
+			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}FreeBSD ISO URL list does not exist. Please run install script."
+	echo -e "${red}FreeBSD ISO URL list does not exist. Please run install script.${nofo}"
+	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
 
@@ -349,13 +369,16 @@ if [ -r ${GRUB_ISO_DIR}/grub-isos-url.list ] ; then
 	TMP_ISOS=`cat ${GRUB_ISO_DIR}/grub-isos-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${GRUB_ISO_DIR}/${ISOS} ] ; then
-			echo -e "${green}Grub image ${ISOS} has been found."
+			#echo -e "${green}Grub image ${ISOS} has been found."
+			:
 		else
-			echo -e "${lred}Grub image ${ISOS} has NOT been found. Please run install script or download manually."
+			echo -e "\t${lred}Grub image ${ISOS} has NOT been found.${nofo}"
+			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}Grub ISO URL list does not exist. Please run install script."
+	echo -e "${red}Grub ISO URL list does not exist.${nofo}"
+	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
 
@@ -363,13 +386,16 @@ if [ -r ${RECOVERY_TEMPLATES_DIR}/recovery-templates-url.list ] ; then
 	TMP_ISOS=`cat ${RECOVERY_TEMPLATES_DIR}/recovery-templates-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${RECOVERY_TEMPLATES_DIR}/${ISOS} ] ; then
-			echo -e "${green}${ISOS} is found."
+			#echo -e "${green}${ISOS} is found."
+			:
 		else
-			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "\t${lred}Recovery template ${ISOS} is NOT found.${nofo}"
+			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}Recovery Template list does not exist. Please run install script."
+	echo -e "${red}Recovery Template list does not exist.${nofo}"
+	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
 
@@ -377,13 +403,16 @@ if [ -r ${WINDOWS_SMART_DRIVERS_DIR} ] ; then
 	TMP_ISOS=`cat ${WINDOWS_SMART_DRIVERS_DIR}/windows-smart-drivers-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${WINDOWS_SMART_DRIVERS_DIR}/${ISOS} ] ; then
-			echo -e "${green}${ISOS} is found."
+			#echo -e "${green}${ISOS} is found."
+			:
 		else
-			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "\t${lred}Windows driver image ${ISOS} is NOT found.${nofo}"
+			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
 	echo -e "${red}Windows Smart Drivers list does not exist. Please run install script."
+	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
 
@@ -391,13 +420,16 @@ if [ -r ${LB_TEMPLATE_DIR}/lbva-template-url.list ] ; then
 	TMP_ISOS=`cat ${LB_TEMPLATE_DIR}/lbva-template-url.list | sed -e 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do 
 		if [ -s ${LB_TEMPLATE_DIR}/${ISOS} ] ; then
-			echo -e "${green}${ISOS} is found."
+			#echo -e "${green}${ISOS} is found."
+			:
 		else
-			echo -e "${lred}${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "\t${lred}Load Balancer template ${ISOS} is NOT found.${nofo}"
+			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}Load Balancer template list does not exist.  Please run install script."
+	echo -e "${red}Load Balancer template list does not exist.  Please run install script.${nofo}"
+	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
 
@@ -419,26 +451,32 @@ if [ -r ${CDN_TEMPLATE_DIR}/cdn-template-url.list ] ; then
 	TMP_ISOS=`cat ${CDN_TEMPLATE_DIR}/cdn-template-url.list | sed -r 's#^.*/##g'`
 	for ISOS in $TMP_ISOS ; do
 		if [ -s ${CDN_TEMPLATE_DIR}/${ISOS} ] ; then
-			echo -e "${green}CDN Template ${ISOS} is found."
+			#echo -e "${green}CDN Template ${ISOS} is found."
+			:
 		else
-			echo -e "${lred}CDN Template ${ISOS} is NOT found. Please run install script or download manually."
+			echo -e "\t${lred}CDN Template ${ISOS} is NOT found."
+			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
 	echo -e "${red}CDN template list does not exist. Please run install script."
+	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
-echo -e "${nofo}"
+if [ $TEMP_FAIL -eq 0 ] ; then
+	echo -e "${lgreen}[+]${nofo} All system templates are detectable."
+else
+	echo -e "${lbrown}[-]${nofo} There are $TEMP_FAIL template fail checks. See above for missing templates."
+fi
+
+echo -ne "${nofo}"
 
 
+# Check / disk size for >=100GB
+rootDiskSize
 
-echo "Pulling table of hypervisor information..."
-runCheckHVandBS | column -s '|' -t
-
-echo -e "Checking hardware...${lbrown}"
-checkHVHW | column -s ',' -t -c4
-echo -e "${nofo}"
-
+# Check time zone
+timeZoneCheck
 
 #check HV interconnectivity
 checkAllHVConn
