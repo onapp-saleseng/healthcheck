@@ -159,6 +159,7 @@ checkISConn()
 {
     #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     #local HOSTIDS=`runSQL "SELECT host_id FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    
     local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
     local HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
     echo -n " "
@@ -247,11 +248,11 @@ createDestroyVM()
         for CURID in $TEMPLATE_IDS ; do
             echo "    Template ID: ${CURID} , Template Label: "`runSQL "SELECT label FROM templates WHERE id=${CURID}"`
         done
-        echo -ne "\n    Provide template ID: "
+        echo -ne "\n${CHCK} Provide template ID: "
         read TEMPLATE_ID
         TEMPLATE_ID=`echo ${TEMPLATE_ID} | tr -dc '0-9'`
     fi
-    if [ "x${TEMPLATE_ID}" == "x" ] ; then echo "${FAIL} Template ID is BLANK! Exiting..." && exit 1 ; fi
+    if [ "x${TEMPLATE_ID}" == "x" ] ; then echo -e "${FAIL} Template ID is BLANK! Exiting..." && exit 1 ; fi
     local MIN_RAM="`runSQL "SELECT min_memory_size FROM templates WHERE id=${TEMPLATE_ID}"`"
     local MIN_P_DISK="`runSQL "SELECT min_disk_size FROM templates WHERE id=${TEMPLATE_ID}"`"
     local XML_REQ="<virtual_machine><template_id>${TEMPLATE_ID}</template_id><label>QATest</label><hostname>qatest</hostname><cpus>1</cpus><cpu_shares>100</cpu_shares><memory>${MIN_RAM}</memory><primary_disk_size>${MIN_P_DISK}</primary_disk_size><required_ip_address_assignment>1</required_ip_address_assignment><required_virtual_machine_build>1</required_virtual_machine_build><required_virtual_machine_startup>1</required_virtual_machine_startup></virtual_machine>"
@@ -260,7 +261,7 @@ createDestroyVM()
     local VM_IDENT=`echo $result | sed -r -e 's/> </>\n</g' | grep -e '<identifier>' -m1 | sed -r -e 's/.+?>([a-z]+)<.+?/\1/'`
     local VM_ID=`echo $result | sed -r -e 's/> </>\n</g' | grep -e '<id type' -m1 | sed -r -e 's/.+?>([0-9]+)<.+?/\1/'`
     sleep 5
-    if [[ "x${VM_ID}" == "x" ]] ; then echo "${FAIL} An issue occurred creating the virtual machine. Please attempt manually or resolve any previous issues." && exit 1 ; fi
+    if [[ "x${VM_ID}" == "x" ]] ; then echo -e "${FAIL} An issue occurred creating the virtual machine. Please attempt manually or resolve any previous issues." && exit 1 ; fi
     VM_ONLINE=0
     echo "    Watching for virtual machine (ID ${VM_ID}) to come online..."
     COUNT=0
@@ -368,7 +369,6 @@ function rootDiskSize()
 
 
 
-
 ###############################################
 ###############################################
 ###############################################
@@ -383,28 +383,26 @@ echo "-------------------------------------"
 echo "OnApp Enterprise Quality Check Script"
 echo "-------------------------------------"
 echo 
-echo "Systems Information:"
-echo
+echo "Control Server System Information:"
 
 # Control Panel Version, store for later comparison.
 CP_OA_VERSION=`cpVersion`
-echo -e "OnApp Control Panel Version ${lbrown}${CP_OA_VERSION}${nofo}."
+echo -e "OnApp Control Panel Version ${brown}${CP_OA_VERSION}${nofo}."
 
 # Kernel and distro for control server
 CP_K_VERSION=`uname -r 2>/dev/null`
 CP_DISTRO=`cat /etc/redhat-release 2>/dev/null`
-echo -e "Kernel Release ${lbrown}${CP_K_VERSION}${nofo}"
-echo -e "Distribution: ${lbrown}${CP_DISTRO}${cyan}"
-
-CPUTABLE="CPU Model,CPU MHz,CPU Cores\n`resourceCheck`"
-echo -e "${CPUTABLE}" | column -s ',' -t
-echo -e ${nofo}
+echo -e "Kernel Release ${brown}${CP_K_VERSION}${nofo}"
+echo -e "Distribution: ${brown}${CP_DISTRO}${nofo}"
+echo -e "CPU Model:${brown} `grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'`${nofo}"
+echo -e "CPU Speed:${brown} `grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '`${nofo} MHz"
+echo -e "CPU Cores:${brown} `grep cpu\ cores /proc/cpuinfo -m1 | cut -d':' -f2 | tr -d ' '`${nofo}"
 echo
 echo '------------------------------------------'
 echo "Pulling table of hypervisor information..."
 runCheckHVandBS | column -s '|' -t
 
-echo -e "Checking hardware...${lbrown}"
+echo -e "Checking hardware...${brown}"
 checkHVHW | column -s ',' -t -c4
 echo -e "${nofo}"
 

@@ -3,14 +3,13 @@ API Calls for creating VM's are enabled. Will process after all checks.
 OnApp Enterprise Quality Check Script
 -------------------------------------
 
-Systems Information:
-
+Control Server System Information:
 OnApp Control Panel Version 5.5.0-40.
 Kernel Release 3.10.0-514.26.2.el7.x86_64
 Distribution: CentOS Linux release 7.3.1611 (Core) 
-CPU Model             CPU MHz  CPU Cores
-Common KVM processor  3092     4
-
+CPU Model: Common KVM processor
+CPU Speed: 3092 MHz
+CPU Cores: 4
 
 ------------------------------------------
 Pulling table of hypervisor information...
