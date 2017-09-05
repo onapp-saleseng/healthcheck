@@ -3,13 +3,15 @@ API Calls for creating VM's are enabled. Will process after all checks.
 OnApp Enterprise Quality Check Script
 -------------------------------------
 
-Control Server System Information:
-OnApp Control Panel Version 5.5.0-40.
-Kernel Release 3.10.0-514.26.2.el7.x86_64
-Distribution: CentOS Linux release 7.3.1611 (Core) 
-CPU Model: Common KVM processor
-CPU Speed: 3092 MHz
-CPU Cores: 4
+    Control Server System Information:
+    OnApp Control Panel Version 5.5.0-40.
+    Kernel Release 3.10.0-514.26.2.el7.x86_64
+    Distribution: CentOS Linux release 7.3.1611 (Core) 
+    CPU Model: Common KVM processor
+    CPU Speed: 3092 MHz
+[?] CPU Cores: 4 (recommended 8)
+[?] Memory: 7822 (recommended 16GB)
+[-] Disk under 100GB
 
 ------------------------------------------
 Pulling table of hypervisor information...
@@ -20,33 +22,33 @@ Pulling table of hypervisor information...
 3  BS1    10.0.0.2    YES    YES   YES    5.4.0-31  2.6.32-642.15.1.el6.x86_64  CentOS release 6.7 (Final)
 
 Checking hardware...
+
 HV   CPU Model              CPU MHz  CPU Cores
 N1    Common KVM processor  3092     4
 N2    Common KVM processor  3092     4
 BS1   Common KVM processor  3092     4
 
 [+] All system templates are detectable.
-[-] Disk under 100GB
 [?] Timezones don't seem the same, check that Europe/Paris = America/New_York
 
-Checking Hypervisor Interconnectivity:
-   1  2  3
-1 [+][+][+]
-2 [+][+][+]
-3 [+][+][+]
+    Checking Hypervisor Interconnectivity:
+
+       1  2  3
+    1 [+][+][+]
+    2 [+][+][+]
+    3 [+][+][+]
 
 
 [+] All hypervisors can ping each other.
 
-   1  2  3
-1 [+][+][+]
-2 [+][+][+]
-3 [+][+][+]
+       1  2  3
+    1 [+][+][+]
+    2 [+][+][+]
+    3 [+][+][+]
 
 [+] All hypervisors can ping each other over the storage network.
 
-Ensuring Compute Zones have proper joins...
-
+    Ensuring Compute Zones have proper joins...
     Checking Compute Zone: Default Compute Zone 
 [+] Network Join:  BaseNetwork 
 [+] Data Store Join:  ISDS 

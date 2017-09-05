@@ -78,7 +78,7 @@ function runSQL()
 # Run the checks on all hypervisors and backup servers, display table. just for status
 function runCheckHVandBS()
 {
-    echo -e "${lbrown}\n#|Label|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro${cyan}"
+    echo -e "${brown}\n#|Label|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro${cyan}"
     local II=0
     # hypervisors
     local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
@@ -130,11 +130,11 @@ function checkAllHVConn()
     
     #local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id UNION SELECT label FROM backup_servers WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
-    echo -e "\nChecking Hypervisor Interconnectivity:"
+    echo -e "\n    Checking Hypervisor Interconnectivity:\n"
     HV_CONN_FAILURE=0
     local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
     II=0
-    echo -n " "
+    echo -n "     "
     for ip in $IPADDRS ; do
         II=$(($II+1))
         echo -n "  ${II}"
@@ -143,7 +143,7 @@ function checkAllHVConn()
     II=0
     for ip in $IPADDRS ; do
         II=$(($II+1))
-        echo -n "${II} "
+        echo -n "    ${II} "
         checkHVConn $ip
     done
     echo -e "${nofo}\n"
@@ -162,7 +162,7 @@ checkISConn()
     
     local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
     local HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
-    echo -n " "
+    echo -n "     "
     II=0
     for ip in $IPADDRS ; do
         II=$(($II+1))
@@ -174,7 +174,7 @@ checkISConn()
     FAIL_OUTPUT=""
     for ip in $IPADDRS ; do
         II=$(($II+1))
-        echo -ne "${II} "
+        echo -ne "    ${II} "
         for hosts in $HOSTIDS ; do
             RETURN=`su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -ne \"${PASS}\") || echo -ne \"${FAIL}\"'"`
             if [[ ${RETURN} == ${FAIL} ]] ; then 
@@ -225,10 +225,9 @@ checkBackupJoin()
 
 checkComputeZones()
 {
-    echo 'Ensuring Compute Zones have proper joins...'
+    echo '    Ensuring Compute Zones have proper joins...'
     local CZ=`runSQL "SELECT id FROM packs WHERE type='HypervisorGroup'"`
     for CURID in ${CZ} ; do
-        echo
         echo -e "    Checking Compute Zone:${cyan}" `runSQL "SELECT label FROM packs WHERE id=${CURID}"` "${nofo}"
         checkNetZones ${CURID}
         checkDataZones ${CURID}
@@ -363,7 +362,6 @@ function checkHVHW()
 # Detect if root disk is over 100GB, for static hypervisors and control panel
 function rootDiskSize()
 {
-    # 100GB * 1024 * 1024 = 104857600 KB
     ( [ `df -l -P -BG / | tail -1 | awk {'print $2'} | tr -d G` -ge 100 ] && echo -e "${PASS} Disk over 100GB" ) || echo -e "${FAIL} Disk under 100GB"
 }
 
@@ -380,29 +378,41 @@ function rootDiskSize()
 ###############################################
 
 echo "-------------------------------------"
-echo "OnApp Enterprise Quality Check Script"
+echo -e "\033[0;37;44mOn\033[0;34;47mApp${nofo} Enterprise Quality Check Script"
 echo "-------------------------------------"
 echo 
-echo "Control Server System Information:"
+echo "    Control Server System Information:"
 
 # Control Panel Version, store for later comparison.
 CP_OA_VERSION=`cpVersion`
-echo -e "OnApp Control Panel Version ${brown}${CP_OA_VERSION}${nofo}."
+echo -e "    OnApp Control Panel Version ${cyan}${CP_OA_VERSION}${nofo}."
 
 # Kernel and distro for control server
 CP_K_VERSION=`uname -r 2>/dev/null`
 CP_DISTRO=`cat /etc/redhat-release 2>/dev/null`
-echo -e "Kernel Release ${brown}${CP_K_VERSION}${nofo}"
-echo -e "Distribution: ${brown}${CP_DISTRO}${nofo}"
-echo -e "CPU Model:${brown} `grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'`${nofo}"
-echo -e "CPU Speed:${brown} `grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '`${nofo} MHz"
-echo -e "CPU Cores:${brown} `grep cpu\ cores /proc/cpuinfo -m1 | cut -d':' -f2 | tr -d ' '`${nofo}"
+echo -e "    Kernel Release ${cyan}${CP_K_VERSION}${nofo}"
+echo -e "    Distribution: ${cyan}${CP_DISTRO}${nofo}"
+echo -e "    CPU Model:${cyan} `grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'`${nofo}"
+echo -e "    CPU Speed:${cyan} `grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '`${nofo} MHz"
+CP_CPU_CORES=`grep cpu\ cores /proc/cpuinfo -m1 | cut -d':' -f2 | tr -d ' '`
+if [[ ${CP_CPU_CORES} -lt 8 ]] ; then
+    echo -e "${CHCK} CPU Cores:${lbrown} ${CP_CPU_CORES}${nofo} (recommended 8)"
+else
+    echo -e "${PASS} CPU Cores:${cyan}" 
+fi
+CP_MEMORY=`free -m | grep Mem | awk {'print $2'}`
+if [[ ${CP_MEMORY} -lt 16000 ]] ; then
+    echo -e "${CHCK} Memory: ${lbrown}${CP_MEMORY}${nofo} (recommended 16GB)"
+else
+    echo -e "${PASS} Memory: ${cyan}${CP_MEMORY}${nofo} MB"
+fi
+rootDiskSize
 echo
 echo '------------------------------------------'
 echo "Pulling table of hypervisor information..."
 runCheckHVandBS | column -s '|' -t
 
-echo -e "Checking hardware...${brown}"
+echo -e "Checking hardware...${brown}\n"
 checkHVHW | column -s ',' -t -c4
 echo -e "${nofo}"
 
@@ -531,9 +541,6 @@ fi
 
 echo -ne "${nofo}"
 
-
-# Check / disk size for >=100GB
-rootDiskSize
 
 # Check time zone
 timeZoneCheck
