@@ -3,7 +3,7 @@
 ### What is this repository for? ###
 
 * An automated quality assurance/validation script for OnApp Enterprise Deployments
-* Ver 0.2.5
+* Ver 0.3
 
 ### What does this script do? ###
 
@@ -18,13 +18,14 @@
 * (0.1.1) Added output example file
 * (0.2) Added creating and destroying a VM as a check (with the -a flag)
 * (0.2.5) Added failure checking for virtual machine creation
+* (0.3) Formatted hypervisor interconnectivity as a table
+* (0.3) Made output of checks more standard with [+], [-], and [?].
 
 ### TO DO ###
-* Include some failure detection for VM creation and deletion. Currently will wait forever if it fails to provision. (0.2) - DONE
 
 ### How do I get set up? ###
 
-* This should be a script which will automatically check, does not require setup besides OnApp being installed.
+* This should be a bash only script which will automatically check, does not require setup besides OnApp being installed.
 
 ### Who do I talk to? ###
 
