@@ -34,6 +34,9 @@ lblue='\e[1;34m'  #Light Blue
 lpurp='\e[1;35m'  #Light Purple
 lcyan='\e[1;36m'  #Light Cyan
 ###
+PASS="${lgreen}[+]${nofo}"
+FAIL="${lred}[-]${nofo}"
+CHCK="${lbrown}[?]${nofo}"
 
 # Check for and include the install config file
 CFG='/onapp/onapp-cp-install/onapp-cp-install.conf'
@@ -75,27 +78,31 @@ function runSQL()
 # Run the checks on all hypervisors and backup servers, display table. just for status
 function runCheckHVandBS()
 {
-    echo -e "${lbrown}\nLabel|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro${cyan}"
-
+    echo -e "${lbrown}\n#|Label|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro${cyan}"
+    local II=0
     # hypervisors
-    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
-    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
+    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
+    local  LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    #local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
     for ip in $IPADDRS ; do
+        II=$((${II}+1))
         local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
         LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
-        echo -ne "${CURLABEL}|${ip}"
+        echo -ne "${II}|${CURLABEL}|${ip}"
         checkHVBSStatus ${ip}
     done
 
     # backup servers
-    local  LABELS=`runSQL "SELECT label from backup_servers WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
-    local IPADDRS=`runSQL "SELECT ip_address FROM backup_servers WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
-    for ip in $IPADDRS ; do
-        local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
-        LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
-        echo -ne "${CURLABEL}|${ip}"
-        checkHVBSStatus ${ip}
-    done
+    #local  LABELS=`runSQL "SELECT label FROM backup_servers WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM backup_servers WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    #for ip in $IPADDRS ; do
+    #    II=$((${II}+1))
+    #    local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
+    #    LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
+    #    echo -ne "${II}|${CURLABEL}|${ip}"
+    #    checkHVBSStatus ${ip}
+    #done
 
     echo -ne "${nofo}"
 }
@@ -103,69 +110,125 @@ function runCheckHVandBS()
 
 function checkHVConn()
 {
-    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
     for ip in $IPADDRS ; do
-	if [ ${1} == ${ip} ] ; then
-            continue
+#	if [ ${1} == ${ip} ] ; then
+#            echo -ne "${white}[ ]${nofo}"
+#            continue
+#        fi
+	RETURN=`su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo -ne \"${PASS}\") || echo -ne \"${FAIL}\"'"`
+        if [[ ${RETURN} == ${FAIL} ]] ; then
+            HV_CONN_FAILURE=1
         fi
-	su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo -e \"${green}$1 can ping $ip\") || echo -e \"${lred}$1 Cannot ping $ip\"'"
+        echo -ne ${RETURN}
     done
+    echo
 }
 
 function checkAllHVConn()
 {
-    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    
+    #local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id UNION SELECT label FROM backup_servers WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    echo -e "\nChecking Hypervisor Interconnectivity:"
+    HV_CONN_FAILURE=0
+    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
+    II=0
+    echo -n " "
     for ip in $IPADDRS ; do
+        II=$(($II+1))
+        echo -n "  ${II}"
+    done
+    echo
+    II=0
+    for ip in $IPADDRS ; do
+        II=$(($II+1))
+        echo -n "${II} "
         checkHVConn $ip
     done
-    echo -e "${nofo}"
+    echo -e "${nofo}\n"
+    if [[ ${HV_CONN_FAILURE} == 1 ]] ; then
+        echo -e "${FAIL} A failure was detected, see above table for ${FAIL}, #'s are in system information table further above."
+    else
+        echo -e "${PASS} All hypervisors can ping each other."
+    fi
+    echo
 }
 
 checkISConn()
 {
-    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
-    local HOSTIDS=`runSQL "SELECT host_id FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    #local HOSTIDS=`runSQL "SELECT host_id FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+    local HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+    echo -n " "
+    II=0
     for ip in $IPADDRS ; do
+        II=$(($II+1))
+        echo -ne "  ${II}"
+    done
+    echo
+    II=0
+    IS_CONN_FAILURE=0
+    FAIL_OUTPUT=""
+    for ip in $IPADDRS ; do
+        II=$(($II+1))
+        echo -ne "${II} "
         for hosts in $HOSTIDS ; do
-            su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -e \"${green}${ip} can ping 10.200.${hosts}.254\") || echo -e \"${lred}${ip} Cannot ping 10.200.${hosts}.254\"'"
+            RETURN=`su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -ne \"${PASS}\") || echo -ne \"${FAIL}\"'"`
+            if [[ ${RETURN} == ${FAIL} ]] ; then 
+                IS_CONN_FAILURE=1
+                FAIL_OUTPUT="${FAIL_OUTPUT},${ip} cannot ping 10.200.${hosts}.254"
+            fi
+            echo -ne ${RETURN}
         done
+        echo
     done
     echo -e ${nofo}
+    if [[ ${IS_CONN_FAILURE} == 1 ]] ; then
+        echo -e "${FAIL} Not all hypervisors are able to ping each other over the storage network."
+        echo -e "${FAIL_OUTPUT}"
+    else
+        echo -e "${PASS} All hypervisors can ping each other over the storage network."
+    fi
+    echo
 }
 
 
 checkNetZones()
 {
     local NJIDS=`runSQL "SELECT network_id FROM networking_network_joins WHERE target_join_id=${1}"`
-    if [ "x${NJIDS}" == "x" ] ; then echo -e "${lred}No Networks Joined!${nofo}" ; fi
+    if [ "x${NJIDS}" == "x" ] ; then echo -e "${FAIL} No Networks Joined!${nofo}" ; fi
     for CURNID in ${NJIDS} ; do
-        echo -e "Network Join:${green} " `runSQL "SELECT label FROM networking_networks WHERE id=${CURNID}"` "${nofo}"
+        echo -e "${PASS} Network Join:${green} " `runSQL "SELECT label FROM networking_networks WHERE id=${CURNID}"` "${nofo}"
     done
 }
 
 checkDataZones()
 {
     local DZJIDS=`runSQL "SELECT data_store_id FROM data_store_joins WHERE target_join_id=${1}"`
-    if [ "x${DZJIDS}" == "x" ] ; then echo -e "${lred}No Data Stores Joines!${nofo}" ; fi
+    if [ "x${DZJIDS}" == "x" ] ; then echo -e "${FAIL} No Data Stores Joined!${nofo}" ; fi
     for CURDID in ${DZJIDS} ; do
-        echo -e "Data Store Join:${green} " `runSQL "SELECT label FROM data_stores WHERE id=${CURDID}"` "${nofo}"
+        echo -e "${PASS} Data Store Join:${green} " `runSQL "SELECT label FROM data_stores WHERE id=${CURDID}"` "${nofo}"
     done
 }
 
 checkBackupJoin()
 {
     local BSJIDS=`runSQL "SELECT backup_server_id FROM backup_server_joins WHERE target_join_id=${1}"`
-    if [ "x${BSJIDS}" == "x" ] ; then echo -e "${purp}No Backup Servers Joined${nofo}" ; fi
+    if [ "x${BSJIDS}" == "x" ] ; then echo -e "${CHCK} No Backup Servers Joined${nofo}" ; fi
     for CURBID in ${BSJIDS} ; do
-        echo -e "Backup Server Join: ${green}" `runSQL "SELECT label FROM backup_servers WHERE id=${CURBID}"` "${nofo}"
+        echo -e "${PASS} Backup Server Join: ${green}" `runSQL "SELECT label FROM backup_servers WHERE id=${CURBID}"` "${nofo}"
     done
 }
 
 checkComputeZones()
 {
+    echo 'Ensuring Compute Zones have proper joins...'
     local CZ=`runSQL "SELECT id FROM packs WHERE type='HypervisorGroup'"`
     for CURID in ${CZ} ; do
-        echo -e "Checking Compute Zone:${cyan}" `runSQL "SELECT label FROM packs WHERE id=${CURID}"` "${nofo}"
+        echo
+        echo -e "    Checking Compute Zone:${cyan}" `runSQL "SELECT label FROM packs WHERE id=${CURID}"` "${nofo}"
         checkNetZones ${CURID}
         checkDataZones ${CURID}
         checkBackupJoin ${CURID}
@@ -177,18 +240,18 @@ createDestroyVM()
   # API Calls for creating a VM and then destroying it if possible.
     local TEMPLATE_IDS=`runSQL "SELECT t.id FROM template_groups AS tg JOIN relation_group_templates AS tjn ON image_template_group_id=tg.id JOIN templates t ON t.id=tjn.template_id WHERE tg.system_group=0;"`
     if [[ `echo -n ${TEMPLATE_IDS} | wc -m` -eq 1 ]] ; then
-        echo "Found one template ID ${TEMPLATE_IDS}, Label: "`runSQL "SELECT label FROM templates WHERE id=${TEMPLATE_IDS}"`
+        echo -e "    Found one template ID ${TEMPLATE_IDS}, Label: "`runSQL "SELECT label FROM templates WHERE id=${TEMPLATE_IDS}"`
         TEMPLATE_ID=${TEMPLATE_IDS}
     else
-        echo "Found multiple non-system templates. Which one should I use?"
+        echo -e "${CHCK} Found multiple non-system templates. Which one should I use?"
         for CURID in $TEMPLATE_IDS ; do
-            echo "Template ID: ${CURID} , Template Label: "`runSQL "SELECT label FROM templates WHERE id=${CURID}"`
+            echo "    Template ID: ${CURID} , Template Label: "`runSQL "SELECT label FROM templates WHERE id=${CURID}"`
         done
-        echo -ne "\nProvide template ID: "
+        echo -ne "\n    Provide template ID: "
         read TEMPLATE_ID
         TEMPLATE_ID=`echo ${TEMPLATE_ID} | tr -dc '0-9'`
     fi
-    if [ "x${TEMPLATE_ID}" == "x" ] ; then echo "Template ID is BLANK! Exiting..." && exit 1 ; fi
+    if [ "x${TEMPLATE_ID}" == "x" ] ; then echo "${FAIL} Template ID is BLANK! Exiting..." && exit 1 ; fi
     local MIN_RAM="`runSQL "SELECT min_memory_size FROM templates WHERE id=${TEMPLATE_ID}"`"
     local MIN_P_DISK="`runSQL "SELECT min_disk_size FROM templates WHERE id=${TEMPLATE_ID}"`"
     local XML_REQ="<virtual_machine><template_id>${TEMPLATE_ID}</template_id><label>QATest</label><hostname>qatest</hostname><cpus>1</cpus><cpu_shares>100</cpu_shares><memory>${MIN_RAM}</memory><primary_disk_size>${MIN_P_DISK}</primary_disk_size><required_ip_address_assignment>1</required_ip_address_assignment><required_virtual_machine_build>1</required_virtual_machine_build><required_virtual_machine_startup>1</required_virtual_machine_startup></virtual_machine>"
@@ -197,29 +260,29 @@ createDestroyVM()
     local VM_IDENT=`echo $result | sed -r -e 's/> </>\n</g' | grep -e '<identifier>' -m1 | sed -r -e 's/.+?>([a-z]+)<.+?/\1/'`
     local VM_ID=`echo $result | sed -r -e 's/> </>\n</g' | grep -e '<id type' -m1 | sed -r -e 's/.+?>([0-9]+)<.+?/\1/'`
     sleep 5
-    if [[ "x${VM_ID}" == "x" ]] ; then echo "An issue occurred creating the virtual machine. Please attempt manually or resolve any previous issues." && exit 1 ; fi
+    if [[ "x${VM_ID}" == "x" ]] ; then echo "${FAIL} An issue occurred creating the virtual machine. Please attempt manually or resolve any previous issues." && exit 1 ; fi
     VM_ONLINE=0
-    echo "Watching for virtual machine (ID ${VM_ID}) to come online..."
+    echo "    Watching for virtual machine (ID ${VM_ID}) to come online..."
     COUNT=0
     while [ ${VM_ONLINE} -eq 0 ] ; do
         # local result=`runSQL "SELECT booted FROM virtual_machines WHERE id=${VM_ID}" | tr -dc '0-9'`
         local result=`curl -s -i -X GET -H 'Accept: application/xml' -H 'Content-type: application/xml' -u ${1}:${2} --url http://localhost/virtual_machines/${VM_ID}/status.xml | sed -r -e 's/> </>\n</g'`
         local VM_STATUS=`echo ${result} | grep state | sed -r -e 's/.+?state>([a-z]+)<.+?/\1/g'`
-        if [[ "${VM_STATUS}" == "delivered" ]] ; then echo -e "Virtual machine is marked as ${green}booted${nofo}." ; VM_ONLINE=1 ; fi
+        if [[ "${VM_STATUS}" == "delivered" ]] ; then echo -e "${PASS} Virtual machine is marked as ${green}booted${nofo}." ; VM_ONLINE=1 ; fi
         let "COUNT += 1"
         if [ ${COUNT} -gt 9 ] ; then
-            if [[ "${VM_STATUS}" == "failed" ]] ; then echo -e "Virtual machine build has ${red}failed.${nofo} Please recheck template and correct setup" ; VM_ONLINE=1; fi
+            if [[ "${VM_STATUS}" == "failed" ]] ; then echo -e "${FAIL} Virtual machine build has ${red}failed.${nofo} Please recheck template and correct setup" ; VM_ONLINE=1; fi
         fi
         sleep 5
     done
 
-    echo "Destroying virtual machine."
+    echo "    Destroying virtual machine."
     sleep 5
 
     local QUERY="curl -s -i -X DELETE -u ${1}:${2} http://localhost/virtual_machines/${VM_ID}.xml?convert_last_backup=0&destroy_all_backups=1"
     local result=`$QUERY`
 
-    echo "Watching for virtual machine to be destroyed"
+    echo "    Watching for virtual machine to be destroyed"
     COUNT=0
     while [ ${VM_ONLINE} -eq 1 ] ; do
         local result=`runSQL "SELECT deleted_at FROM virtual_machines WHERE id=${VM_ID}"`
@@ -228,7 +291,7 @@ createDestroyVM()
         #COUNT=${COUNT}+1
         let "COUNT += 1"
         if [[ ${result} != "NULL" ]] ; then
-            echo "Virtual machine appears to have been destroyed."
+            echo -e "${PASS} Virtual machine appears to have been destroyed."
             VM_ONLINE=2
         #else
             #if [ ${COUNT} -gt 19 ] ; then
@@ -257,8 +320,8 @@ function timeZoneCheck()
 {
     local GEOTZ=`curl -s http://ip-api.com/json | sed -r -e 's/.+"timezone":"([^"]+?)".+/\1/g'`
     local CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}`
-    ( [[ ${GEOTZ} != ${CURTZ} ]] && echo -e "${lbrown}[?]${nofo} Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}" ) \
-	 || echo -e "${lgreen}[+]${nofo} Timezones appear to match: ${CURTZ}${nofo}"
+    ( [[ ${GEOTZ} != ${CURTZ} ]] && echo -e "${CHCK} Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}" ) \
+	 || echo -e "${PASS} Timezones appear to match: ${CURTZ}${nofo}"
 }
 
 # Check HV or BS status from control server
@@ -275,7 +338,7 @@ function checkHVBSStatus()
 # CPU Family / Vendor checker. Information comes in CSV
 function resourceCheck()
 {
-    local CPUMODEL=`grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2`
+    local CPUMODEL=`grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'`
     local CPUSPEED=`grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '`
     local CPUCORES=`grep cpu\ cores /proc/cpuinfo -m1 | cut -d':' -f2 | tr -d ' '`
     echo "${CPUMODEL},${CPUSPEED},${CPUCORES}"
@@ -284,8 +347,8 @@ function resourceCheck()
 function checkHVHW()
 {
     echo -e "HV,CPU Model,CPU MHz,CPU Cores${cyan}"
-    local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
-    local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
+    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
+    local  LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     for ip in $IPADDRS ; do
         local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
         LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
@@ -300,7 +363,7 @@ function checkHVHW()
 function rootDiskSize()
 {
     # 100GB * 1024 * 1024 = 104857600 KB
-    ( [ `df -l -P -BG / | tail -1 | awk {'print $2'} | tr -d G` -ge 100 ] && echo -e "${lgreen}[+]${nofo} Disk over 100GB" ) || echo -e "${lred}[-]${nofo} Disk under 100GB"
+    ( [ `df -l -P -BG / | tail -1 | awk {'print $2'} | tr -d G` -ge 100 ] && echo -e "${PASS} Disk over 100GB" ) || echo -e "${FAIL} Disk under 100GB"
 }
 
 
@@ -331,14 +394,13 @@ echo -e "OnApp Control Panel Version ${lbrown}${CP_OA_VERSION}${nofo}."
 CP_K_VERSION=`uname -r 2>/dev/null`
 CP_DISTRO=`cat /etc/redhat-release 2>/dev/null`
 echo -e "Kernel Release ${lbrown}${CP_K_VERSION}${nofo}"
-echo -e "Distribution: ${lbrown}${CP_DISTRO}${nofo}"
+echo -e "Distribution: ${lbrown}${CP_DISTRO}${cyan}"
 
-CPUTABLE="\nCPU Model,CPU MHz,CPU Cores\n`resourceCheck`"
+CPUTABLE="CPU Model,CPU MHz,CPU Cores\n`resourceCheck`"
 echo -e "${CPUTABLE}" | column -s ',' -t
-
-sleep 1.0
-
+echo -e ${nofo}
 echo
+echo '------------------------------------------'
 echo "Pulling table of hypervisor information..."
 runCheckHVandBS | column -s '|' -t
 
@@ -459,14 +521,14 @@ if [ -r ${CDN_TEMPLATE_DIR}/cdn-template-url.list ] ; then
 		fi
 	done
 else
-	echo -e "${red}CDN template list does not exist. Please run install script."
+	echo -e "${red}CDN template list does not exist. Please run install script.${nofo}"
 	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
 if [ $TEMP_FAIL -eq 0 ] ; then
-	echo -e "${lgreen}[+]${nofo} All system templates are detectable."
+	echo -e "${PASS} All system templates are detectable."
 else
-	echo -e "${lbrown}[-]${nofo} There are $TEMP_FAIL template fail checks. See above for missing templates."
+	echo -e "${CHCK} There are $TEMP_FAIL template fail checks. See above for missing templates."
 fi
 
 echo -ne "${nofo}"
@@ -488,11 +550,11 @@ checkComputeZones
 
 if [ ${API_CALLS} -eq 1 ] ; then
   echo '----------------------------'
-  echo -e '\n'
-  echo "API Calls are enabled but require a username and password."
-  echo -n "Please provide administrator username: "
+  echo 
+  echo -e "${CHCK} API Calls are enabled but require a username and password."
+  echo -ne "${CHCK} Please provide administrator username: "
   read API_USER
-  echo -n "Please provide password for this user: "
+  echo -ne "${CHCK} Please provide password for this user: "
   read -s API_PASS
   echo
   createDestroyVM ${API_USER} ${API_PASS}
