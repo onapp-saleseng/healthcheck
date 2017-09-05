@@ -1,74 +1,69 @@
-[root@onapp enterpriseqa]# ./qualitycheck.sh -a
 API Calls for creating VM's are enabled. Will process after all checks.
 -------------------------------------
 OnApp Enterprise Quality Check Script
 -------------------------------------
 
-OnApp Control Panel Version 5.4.0-83.
+Systems Information:
+
+OnApp Control Panel Version 5.5.0-40.
 Kernel Release 3.10.0-514.26.2.el7.x86_64
 Distribution: CentOS Linux release 7.3.1611 (Core) 
-CPU Model              CPU MHz  CPU Cores
- Common KVM processor  3092     4
-Disk under 100GB
-Timezones don't seem the same, check that Europe/Paris = America/New_York
-boot-freebsd-onapp.iso is found.
-boot-freebsd-onapp-kvm.iso is found.
-boot-freebsd-onapp-generic.iso is found.
-boot-freebsd-onapp-3.5.iso is found.
-Grub image GRUBsuper_grub2_disk_hybrid_2.02s4.iso has been found.
-recovery-centos-3.5.iso is found.
-recovery-centos-3.5.initrd is found.
-recovery-centos-3.5.kernel is found.
-centos-5.3-lbva_6.11-x64-1.12.tar.gz is found.
-CDN Template debian-7.0-x64-1.22-xen.kvm.kvm_virtio.tar.gz is found.
+CPU Model             CPU MHz  CPU Cores
+Common KVM processor  3092     4
 
+
+------------------------------------------
 Pulling table of hypervisor information...
 
-Label  IP Address  Ping?  SSH?  SNMP?  Version   Kernel                      Distro
-N1     10.0.0.3    YES    YES   YES    5.4.0-30  3.10.0-327.28.3.el7.x86_64  CentOS Linux release 7.3.1611 (Core)
-N2     10.0.0.4    YES    YES   YES    5.4.0-30  3.10.0-327.28.3.el7.x86_64  CentOS Linux release 7.3.1611 (Core)
-BS1    10.0.0.2    YES    YES   YES    5.4.0-31  2.6.32-642.15.1.el6.x86_64  CentOS release 6.7 (Final)
+#  Label  IP Address  Ping?  SSH?  SNMP?  Version   Kernel                      Distro
+1  N1     10.0.0.3    YES    YES   YES    5.4.0-30  3.10.0-327.28.3.el7.x86_64  CentOS Linux release 7.3.1611 (Core)
+2  N2     10.0.0.4    YES    YES   YES    5.4.0-30  3.10.0-327.28.3.el7.x86_64  CentOS Linux release 7.3.1611 (Core)
+3  BS1    10.0.0.2    YES    YES   YES    5.4.0-31  2.6.32-642.15.1.el6.x86_64  CentOS release 6.7 (Final)
 
 Checking hardware...
 HV   CPU Model              CPU MHz  CPU Cores
-BS1   Common KVM processor  3092     4
 N1    Common KVM processor  3092     4
 N2    Common KVM processor  3092     4
+BS1   Common KVM processor  3092     4
 
-10.0.0.2 can ping 10.0.0.3
-10.0.0.2 can ping 10.0.0.4
-10.0.0.3 can ping 10.0.0.2
-10.0.0.3 can ping 10.0.0.4
-10.0.0.4 can ping 10.0.0.2
-10.0.0.4 can ping 10.0.0.3
+[+] All system templates are detectable.
+[-] Disk under 100GB
+[?] Timezones don't seem the same, check that Europe/Paris = America/New_York
 
-10.0.0.2 can ping 10.200.1.254
-10.0.0.2 can ping 10.200.2.254
-10.0.0.2 can ping 10.200.3.254
-10.0.0.3 can ping 10.200.1.254
-10.0.0.3 can ping 10.200.2.254
-10.0.0.3 can ping 10.200.3.254
-10.0.0.4 can ping 10.200.1.254
-10.0.0.4 can ping 10.200.2.254
-10.0.0.4 can ping 10.200.3.254
+Checking Hypervisor Interconnectivity:
+   1  2  3
+1 [+][+][+]
+2 [+][+][+]
+3 [+][+][+]
 
-Checking Compute Zone: Default Compute Zone 
-Network Join:  BaseNetwork 
-Data Store Join:  ISDS 
-Backup Server Join:  BS1 
+
+[+] All hypervisors can ping each other.
+
+   1  2  3
+1 [+][+][+]
+2 [+][+][+]
+3 [+][+][+]
+
+[+] All hypervisors can ping each other over the storage network.
+
+Ensuring Compute Zones have proper joins...
+
+    Checking Compute Zone: Default Compute Zone 
+[+] Network Join:  BaseNetwork 
+[+] Data Store Join:  ISDS 
+[+] Backup Server Join:  BS1 
 ----------------------------
 
+[?] API Calls are enabled but require a username and password.
+[?] Please provide administrator username: admin
+[?] Please provide password for this user: 
+[?] Found multiple non-system templates. Which one should I use?
+    Template ID: 4 , Template Label: CentOS 6.0 x64
+    Template ID: 5 , Template Label: Ubuntu 14.10 x64
 
-API Calls are enabled but require a username and password.
-Please provide administrator username: admin
-Please provide password for this user: 
-Found multiple non-system templates. Which one should I use?
-Template ID: 4 , Template Label: CentOS 6.0 x64
-Template ID: 5 , Template Label: Ubuntu 14.10 x64
-
-Provide template ID: 5
-Watching for virtual machine (ID 24) to come online...
-Virtual machine build has failed. Please recheck template and correct setup
-Destroying virtual machine.
-Watching for virtual machine to be destroyed
-Virtual machine appears to have been destroyed.
+    Provide template ID: 4
+    Watching for virtual machine (ID 34) to come online...
+[+] Virtual machine is marked as booted.
+    Destroying virtual machine.
+    Watching for virtual machine to be destroyed
+[+] Virtual machine appears to have been destroyed.
