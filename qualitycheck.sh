@@ -48,21 +48,26 @@ else
 	exit 1;
 fi
 
+
 ONAPP_CONF_DIR="${ONAPP_ROOT}/interface/config"
 ONAPP_CONF_FILE="${ONAPP_CONF_DIR}/on_app.yml"
 DBCONF="${ONAPP_CONF_DIR}/database.yml"
 DBNAME=`grep database ${DBCONF} | head -1 | awk {'print $2'} | sed "s/\"//g;s/'//g"`
-SQLU=`grep username ${DBCONF} | head -1 | awk {'print $2'} | sed "s/\"//g;s/'//g"`
-SQLH=`grep host ${DBCONF} | head -1 | awk {'print $2'} | sed "s/\"//g;s/'//g"`
-SQLP=`grep password ${DBCONF} | head -1 | awk {'print $2'} | sed "s/'$//g;s/^'//g;s/\"$//g;s/^\"//g"`
-
-
-# Database
 DBDIR=`grep datadir /etc/my.cnf | cut -d'=' -f2`
-DBNAME=`grep database ${DBCONF} | head -1 | awk {'print $2'} | sed "s/\"//g;s/'//g"`
 SQLU=`grep username ${DBCONF} | head -1 | awk {'print $2'} | sed "s/\"//g;s/'//g"`
 SQLH=`grep host ${DBCONF} | head -1 | awk {'print $2'} | sed "s/\"//g;s/'//g"`
 SQLP=`grep password ${DBCONF} | head -1 | awk {'print $2'} | sed "s/'$//g;s/^'//g;s/\"$//g;s/^\"//g"`
+
+
+IS_CHECK=`grep storage_enabled: /onapp/interface/config/on_app.yml | cut -d':' -f2 | tr -d ' '`
+if [[ ${IS_CHECK} == 'true' ]] ; then
+    echo "Integrated Storage is enabled."
+    STORE_ENABLED=1
+else
+    echo "Integrated storage is disabled."
+    STORE_ENABLED=0
+fi
+# Database
 
 
 
@@ -152,14 +157,14 @@ function checkAllHVConn()
     else
         echo -e "${PASS} All hypervisors can ping each other."
     fi
-    echo
 }
 
 checkISConn()
 {
     #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     #local HOSTIDS=`runSQL "SELECT host_id FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
-    
+    echo "    Checking storage networking:"
+    echo    
     local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
     local HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL AND ip_address NOT IN (SELECT ip_address FROM backup_servers) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
     echo -n "     "
@@ -329,7 +334,7 @@ function checkHVBSStatus()
 {
     (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
     (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
-    (nc -c '' ${1} 161 2>&1 >/dev/null && echo -ne "|YES" ) || echo -ne "|NO"
+    (nc ${1} 161  2>&1 >/dev/null </dev/null && echo -ne "|YES" ) || echo -ne "|NO"
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /onapp/onapp-store-install.version 2>/dev/null'" 2>/dev/null`
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'uname -r 2>/dev/null'" 2>/dev/null`
     echo -e "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /etc/redhat-release 2>/dev/null'" 2>/dev/null`
@@ -407,15 +412,6 @@ else
     echo -e "${PASS} Memory: ${cyan}${CP_MEMORY}${nofo} MB"
 fi
 rootDiskSize
-echo
-echo '------------------------------------------'
-echo "Pulling table of hypervisor information..."
-runCheckHVandBS | column -s '|' -t
-
-echo -e "Checking hardware...${brown}\n"
-checkHVHW | column -s ',' -t -c4
-echo -e "${nofo}"
-
 # Check on control server for recovery and LoadBalancer templates
 TEMP_FAIL=0
 if [ -r ${FREEBSD_ISO_DIR}/freebsd-iso-url.list ] ; then
@@ -544,10 +540,19 @@ echo -ne "${nofo}"
 
 # Check time zone
 timeZoneCheck
+echo
+echo '------------------------------------------'
+echo "Pulling table of hypervisor information..."
+runCheckHVandBS | column -s '|' -t
+
+echo -e "Checking hardware...${brown}\n"
+checkHVHW | column -s ',' -t -c4
+echo -e "${nofo}"
+
 
 #check HV interconnectivity
 checkAllHVConn
-checkISConn
+[ $STORE_ENABLED -eq 1 ] && checkISConn || echo 'Skipping storage check.'
 
 checkComputeZones
 
