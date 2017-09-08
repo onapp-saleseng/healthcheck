@@ -1,45 +1,57 @@
-API Calls for creating VM's are enabled. Will process after all checks.
--------------------------------------
-OnApp Enterprise Quality Check Script
--------------------------------------
+# ./qualitycheck.sh 
+Integrated Storage is enabled.
+-----------------------------------------
+  OnApp Enterprise Quality Check Script
+-----------------------------------------
 
     Control Server System Information:
-    OnApp Control Panel Version 5.5.0-40.
-    Kernel Release 3.10.0-514.26.2.el7.x86_64
-    Distribution: CentOS Linux release 7.3.1611 (Core) 
-    CPU Model: Common KVM processor
-    CPU Speed: 3092 MHz
+    OnApp Control Panel Version 5.5.0-42.
+    Kernel Release 2.6.32-696.el6.x86_64
+    Distribution: CentOS release 6.9 (Final)
+    CPU Model: Intel(R) Xeon(R) CPU           L5640  @ 2.27GHz
+    CPU Speed: 2266 MHz
 [?] CPU Cores: 4 (recommended 8)
-[?] Memory: 7822 (recommended 16GB)
+[+] Memory: 32240 MB
 [-] Disk under 100GB
+[+] All system templates are detectable.
+[?] Timezones don't seem the same, check that America/Los_Angeles = America/New_York
 
 ------------------------------------------
 Pulling table of hypervisor information...
 
-#  Label  IP Address  Ping?  SSH?  SNMP?  Version   Kernel                      Distro
-1  N1     10.0.0.3    YES    YES   YES    5.4.0-30  3.10.0-327.28.3.el7.x86_64  CentOS Linux release 7.3.1611 (Core)
-2  N2     10.0.0.4    YES    YES   YES    5.4.0-30  3.10.0-327.28.3.el7.x86_64  CentOS Linux release 7.3.1611 (Core)
-3  BS1    10.0.0.2    YES    YES   YES    5.4.0-31  2.6.32-642.15.1.el6.x86_64  CentOS release 6.7 (Final)
+#  Label          IP Address  Ping?  SSH?  SNMP?  Version                         Kernel                      Distro
+1  KVM-HV1        10.64.0.2   YES    YES   YES    5.5.0-1                         2.6.32-642.13.1.el6.x86_64  CentOS release 6.8 (Final)
+2  KVM-HV2        10.64.0.3   YES    YES   YES    5.5.0-1                         2.6.32-642.11.1.el6.x86_64  CentOS release 6.8 (Final)
+3  CloudBoot HV1  10.64.0.11  YES    YES   YES    5.5.0-20                        2.6.32-696.3.2.el6.x86_64   CentOS release 6.7 (Final)
+4  CloudBoot HV2  10.64.0.12  YES    YES   YES    5.5.0-20                        2.6.32-696.3.2.el6.x86_64   CentOS release 6.7 (Final)
+5  BS1            10.64.0.13  YES    YES   YES    Version : master Vendor: Onapp  2.6.32-696.3.2.el6.x86_64   CentOS release 6.7 (Final)
 
 Checking hardware...
 
-HV   CPU Model              CPU MHz  CPU Cores
-N1    Common KVM processor  3092     4
-N2    Common KVM processor  3092     4
-BS1   Common KVM processor  3092     4
+HV             CPU Model                              CPU MHz  CPU Cores
+KVM-HV1         Intel(R) Xeon(R) CPU L5640 @ 2.27GHz  2266     4
+KVM-HV2         Intel(R) Xeon(R) CPU L5640 @ 2.27GHz  2266     4
+CloudBoot HV1   Intel(R) Xeon(R) CPU L5640 @ 2.27GHz  2266     4
+CloudBoot HV2   Intel(R) Xeon(R) CPU L5640 @ 2.27GHz  2266     4
+BS1             Intel(R) Xeon(R) CPU L5640 @ 2.27GHz  2266     4
 
-[+] All system templates are detectable.
-[?] Timezones don't seem the same, check that Europe/Paris = America/New_York
 
     Checking Hypervisor Interconnectivity:
 
-       1  2  3
-    1 [+][+][+]
-    2 [+][+][+]
-    3 [+][+][+]
+       1  2  3  4  5
+    1 [+][+][+][+][+]
+    2 [+][+][+][+][+]
+    3 [+][+][+][+][+]
+    4 [+][+][+][+][+]
+    5 [+][+][+][+][+]
 
 
 [+] All hypervisors can ping each other.
+    Checking storage networking:
+
+  1 - CloudBoot HV1 @ 10.64.0.11
+  2 - CloudBoot HV2 @ 10.64.0.12
+  3 - CloudBoot BS1 @ 10.64.0.13
 
        1  2  3
     1 [+][+][+]
@@ -49,22 +61,31 @@ BS1   Common KVM processor  3092     4
 [+] All hypervisors can ping each other over the storage network.
 
     Ensuring Compute Zones have proper joins...
-    Checking Compute Zone: Default Compute Zone 
-[+] Network Join:  BaseNetwork 
-[+] Data Store Join:  ISDS 
+--- Checking Compute Zone: Static Compute Zone 
+[-] No Networks Joined!
+[+] Data Store Join:  ISCSI1 
 [+] Backup Server Join:  BS1 
-----------------------------
-
-[?] API Calls are enabled but require a username and password.
-[?] Please provide administrator username: admin
-[?] Please provide password for this user: 
-[?] Found multiple non-system templates. Which one should I use?
-    Template ID: 4 , Template Label: CentOS 6.0 x64
-    Template ID: 5 , Template Label: Ubuntu 14.10 x64
-
-    Provide template ID: 4
-    Watching for virtual machine (ID 34) to come online...
-[+] Virtual machine is marked as booted.
-    Destroying virtual machine.
-    Watching for virtual machine to be destroyed
-[+] Virtual machine appears to have been destroyed.
+[+] Backup Server Join:  BS1 
+-----------------------
+--- Checking Compute Zone: CloudBoot Compute Zone 
+[+] Network Join:  PrivateIP 
+[+] Network Join:  PublicIP 
+[+] Network Join:  private network 
+[+] Data Store Join:  IS 
+[+] Backup Server Join:  BS1 
+-----------------------
+--- Checking Compute Zone: Manchester UK 
+[+] Network Join:  Manchester UK 
+[+] Data Store Join:  Manchester UK 
+[+] Backup Server Join:  Backup Server 
+-----------------------
+--- Checking Compute Zone: London Test CP 
+[+] Network Join:  London Test CP 
+[+] Data Store Join:  London Test CP 
+[+] Backup Server Join:  Backup Server 
+-----------------------
+--- Checking Compute Zone: Lincoln-Jolt-Dev 
+[+] Network Join:  Lincoln-Jolt-Dev 
+[+] Data Store Join:  Lincoln-Jolt-Dev 
+[+] Backup Server Join:  Backup Server 
+-----------------------

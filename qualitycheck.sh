@@ -94,14 +94,12 @@ IS_LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_ord
 IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
 LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
 
+
 # Run the checks on all hypervisors and backup servers, display table. just for status
 function runCheckHVandBS()
 {
     local LABELS_TEMP=${LABELS}
-    echo
-    echo '------------------------------------------'
-    echo "Pulling table of hypervisor information..."
-    echo -e "${brown}\n#|Label|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro${cyan}"
+    echo -e "#|Label|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro${cyan}"
     local II=0
     # hypervisors
     #local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
@@ -112,7 +110,7 @@ function runCheckHVandBS()
     for ip in $IPADDRS ; do
         II=$((${II}+1))
         local CURLABEL=`echo ${LABELS_TEMP} | cut -d',' -f1`
-        LABELS=`echo ${LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
+        LABELS_TEMP=`echo ${LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
         echo -ne "${II}|${CURLABEL}|${ip}"
         checkHVBSStatus ${ip}
     done
@@ -128,7 +126,6 @@ function runCheckHVandBS()
     #    checkHVBSStatus ${ip}
     #done
 
-    echo -e "${nofo}"
 }
 
 
@@ -259,6 +256,10 @@ function checkComputeZones()
     echo '    Ensuring Compute Zones have proper joins...'
     local CZ=`runSQL "SELECT id FROM packs WHERE type='HypervisorGroup'"`
     for CURID in ${CZ} ; do
+        VC_CHECK=`runSQL "SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id=${CURID} AND hypervisor_type NOT IN ('vcenter','vcloud')"`
+        if [[ ${VC_CHECK} == "" ]] ; then
+            continue
+        fi
         echo -e "--- Checking Compute Zone:${cyan}" `runSQL "SELECT label FROM packs WHERE id=${CURID}"` "${nofo}"
         checkNetZones ${CURID}
         checkDataZones ${CURID}
@@ -397,26 +398,25 @@ function resourceCheck()
 {
     local CPUMODEL=`grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'`
     local CPUSPEED=`grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '`
-    local CPUCORES=`grep cpu\ cores /proc/cpuinfo -m1 | cut -d':' -f2 | tr -d ' '`
+    local CPUCORES=`nproc --all`
     echo "${CPUMODEL},${CPUSPEED},${CPUCORES}"
 }
 
 function checkHVHW()
 {
     LABELS_TEMP=${LABELS}
-    echo -e "Checking hardware...${brown}\n"
+
     echo -e "HV,CPU Model,CPU MHz,CPU Cores${cyan}"
     #local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
     #local  LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     for ip in $IPADDRS ; do
         local CURLABEL=`echo ${LABELS_TEMP} | cut -d',' -f1`
-        LABELS=`echo ${LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
+        LABELS_TEMP=`echo ${LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
         echo -ne "${CURLABEL}"
         echo -ne ","`su onapp -c 'grep model\ name /proc/cpuinfo -m1 | cut -d":" -f2'`
         echo -ne ","`su onapp -c 'grep cpu\ MHz /proc/cpuinfo -m1 | cut -d":" -f2 | cut -d"." -f1 | tr -d " "'`
-        echo -e ","`su onapp -c 'grep cpu\ cores /proc/cpuinfo -m1 | cut -d":" -f2 | tr -d " "'`
+        echo -e ","`nproc --all`
     done
-    echo -e "${nofo}"
 }
 
 # Detect if root disk is over 100GB, for static hypervisors and control panel
@@ -454,7 +454,7 @@ echo -e "    Kernel Release ${cyan}${CP_K_VERSION}${nofo}"
 echo -e "    Distribution: ${cyan}${CP_DISTRO}${nofo}"
 echo -e "    CPU Model:${cyan} `grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'`${nofo}"
 echo -e "    CPU Speed:${cyan} `grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '`${nofo} MHz"
-CP_CPU_CORES=`grep cpu\ cores /proc/cpuinfo -m1 | cut -d':' -f2 | tr -d ' '`
+CP_CPU_CORES=`nproc --all`
 if [[ ${CP_CPU_CORES} -lt 8 ]] ; then
     echo -e "${CHCK} CPU Cores:${lbrown} ${CP_CPU_CORES}${nofo} (recommended 8)"
 else
@@ -596,9 +596,15 @@ echo -ne "${nofo}"
 # Check time zone
 timeZoneCheck
 
-
+echo
+echo '------------------------------------------'
+echo -e "Pulling table of hypervisor information...${brown}\n"
 runCheckHVandBS | column -s '|' -t
+echo -e "${nofo}"
+
+echo -e "Checking hardware...${brown}\n"
 checkHVHW | column -s ',' -t -c4
+echo -e "${nofo}"
 
 
 if [ ${HW_ONLY} -eq 1 ] ; then
