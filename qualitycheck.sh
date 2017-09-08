@@ -336,7 +336,7 @@ function hvVersion()
         else if [ -f /onappstore/package-version.txt ] ; then
                 grep Version /onappstore/package-version.txt
             else
-                echo 'echo a'
+                echo '????'
             fi
         fi
     fi
