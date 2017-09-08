@@ -1,15 +1,21 @@
 #!/bin/bash
 
 # Script for automatically checking integrity of OnApp installations
-API_CALLS=0
+API_CALLS=0 ; HW_ONLY=0
 while [[ $# -gt 0 ]] ; do
     key=$1
     case $key in
         -a|--api)
-        API_CALLS=1
-        echo "API Calls for creating VM's are enabled. Will process after all checks."
-        sleep 1
-        shift
+            API_CALLS=1
+            echo "API Calls for creating VM's are enabled. Will process after all checks."
+            sleep 1
+            shift
+        ;;
+        -h|--hardware)
+            HW_ONLY=1
+            echo "Ending after system checks"
+            sleep 1
+            shift
         ;;
     esac
     shift
@@ -328,9 +334,9 @@ function hvVersion()
     else if [ -f /onapp/onapp-hv-tools.version ] ; then
             cat /onapp/onapp-hv-tools.version
         else if [ -f /onappstore/package-version.txt ] ; then
-                grep Version /onappstore/package-version.txt | awk {'print $3'}
+                grep Version /onappstore/package-version.txt
             else
-                echo '????'
+                echo 'echo a'
             fi
         fi
     fi
@@ -351,7 +357,7 @@ function checkHVBSStatus()
     (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
     (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
     (nc ${1} 161  2>&1 >/dev/null </dev/null && echo -ne "|YES" ) || echo -ne "|NO"
-    echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} '$(typeset -f hvVersion;hvVersion)'" 2>/dev/null`
+    echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} '$(typeset -f hvVersion);hvVersion'" | sed -r -e 's/.+: ([0-9]\.[0-9]).+/\1/'`
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'uname -r 2>/dev/null'" 2>/dev/null`
     echo -e "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /etc/redhat-release 2>/dev/null'" 2>/dev/null`
 }
@@ -565,6 +571,9 @@ echo -e "Checking hardware...${brown}\n"
 checkHVHW | column -s ',' -t -c4
 echo -e "${nofo}"
 
+if [ ${HW_ONLY} -eq 1 ] ; then
+    exit 0
+fi
 
 #check HV interconnectivity
 checkAllHVConn
