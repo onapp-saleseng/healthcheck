@@ -162,8 +162,16 @@ function checkISConn()
     #local HOSTIDS=`runSQL "SELECT host_id FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     echo "    Checking storage networking:"
     echo
-    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
-    local HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+    local HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+    local LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    II=0
+    for ip in $IPADDRS ; do
+        II=$(($II+1))
+        local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
+        LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
+        echo -e "  ${II} - ${CURLABEL} @ ${ip}"
+    done
     echo -n "     "
     II=0
     for ip in $IPADDRS ; do
@@ -230,10 +238,11 @@ function checkComputeZones()
     echo '    Ensuring Compute Zones have proper joins...'
     local CZ=`runSQL "SELECT id FROM packs WHERE type='HypervisorGroup'"`
     for CURID in ${CZ} ; do
-        echo -e "    Checking Compute Zone:${cyan}" `runSQL "SELECT label FROM packs WHERE id=${CURID}"` "${nofo}"
+        echo -e "--- Checking Compute Zone:${cyan}" `runSQL "SELECT label FROM packs WHERE id=${CURID}"` "${nofo}"
         checkNetZones ${CURID}
         checkDataZones ${CURID}
         checkBackupJoin ${CURID}
+        echo '    -------------------'
     done
 }
 
@@ -314,7 +323,17 @@ function cpVersion()
 # Check hypervisor version
 function hvVersion()
 {
-    cat /onapp/onapp-store-install.version
+    if [ -f /onapp/onapp-store-install.version ] ; then
+        cat /onapp/onapp-store-install.version
+    else if [ -f /onapp/onapp-hv-tools.version ] ; then
+            cat /onapp/onapp-hv-tools.version
+        else if [ -f /onappstore/package-version.txt ] ; then
+                grep Version /onappstore/package-version.txt | awk {'print $3'}
+            else
+                echo '????'
+            fi
+        fi
+    fi
 }
 
 # Geolocate self time zone, check with configured time zone
@@ -332,7 +351,7 @@ function checkHVBSStatus()
     (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
     (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
     (nc ${1} 161  2>&1 >/dev/null </dev/null && echo -ne "|YES" ) || echo -ne "|NO"
-    echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /onapp/onapp-store-install.version 2>/dev/null'" 2>/dev/null`
+    echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} '$(typeset -f hvVersion;hvVersion)'" 2>/dev/null`
     echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'uname -r 2>/dev/null'" 2>/dev/null`
     echo -e "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /etc/redhat-release 2>/dev/null'" 2>/dev/null`
 }
