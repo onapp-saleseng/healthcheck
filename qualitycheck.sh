@@ -77,6 +77,8 @@ fi
 
 
 
+
+
 # Run a SQL query
 function runSQL()
 {
@@ -85,21 +87,32 @@ function runSQL()
     echo "${result}";
 }
 
+# Setting SQL query results to abstract them further
+IS_IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+IS_HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+IS_LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
+LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
 
 # Run the checks on all hypervisors and backup servers, display table. just for status
 function runCheckHVandBS()
 {
+    local LABELS_TEMP=${LABELS}
+    echo
+    echo '------------------------------------------'
+    echo "Pulling table of hypervisor information..."
     echo -e "${brown}\n#|Label|IP Address|Ping?|SSH?|SNMP?|Version|Kernel|Distro${cyan}"
     local II=0
     # hypervisors
-    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
-    local  LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
+    #local  LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+
     #local  LABELS=`runSQL "SELECT label FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL and ip_address NOT IN (SELECT ip_address FROM backup_servers) ORDER BY id"`
     for ip in $IPADDRS ; do
         II=$((${II}+1))
-        local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
-        LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
+        local CURLABEL=`echo ${LABELS_TEMP} | cut -d',' -f1`
+        LABELS=`echo ${LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
         echo -ne "${II}|${CURLABEL}|${ip}"
         checkHVBSStatus ${ip}
     done
@@ -115,13 +128,13 @@ function runCheckHVandBS()
     #    checkHVBSStatus ${ip}
     #done
 
-    echo -ne "${nofo}"
+    echo -e "${nofo}"
 }
 
 
 function checkHVConn()
 {
-    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
     for ip in $IPADDRS ; do
 #	if [ ${1} == ${ip} ] ; then
 	RETURN=`su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo -ne \"${PASS}\") || echo -ne \"${FAIL}\"'"`
@@ -140,7 +153,7 @@ function checkAllHVConn()
     #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     echo -e "\n    Checking Hypervisor Interconnectivity:\n"
     HV_CONN_FAILURE=0
-    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
     II=0
     echo -n "     "
     for ip in $IPADDRS ; do
@@ -164,23 +177,25 @@ function checkAllHVConn()
 
 function checkISConn()
 {
+    IS_LABELS_TEMP=${IS_LABELS}
     #local IPADDRS=`runSQL "SELECT ip_address FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     #local HOSTIDS=`runSQL "SELECT host_id FROM hypervisors WHERE enabled=1 AND ip_address IS NOT NULL ORDER BY id"`
     echo "    Checking storage networking:"
     echo
-    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
-    local HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
-    local LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+    #local HOSTIDS=`runSQL "SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T"`
+    #local LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     II=0
-    for ip in $IPADDRS ; do
+    for ip in $IS_IPADDRS ; do
         II=$(($II+1))
-        local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
-        LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
+        local CURLABEL=`echo ${IS_LABELS_TEMP} | cut -d',' -f1`
+        IS_LABELS_TEMP=`echo ${IS_LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
         echo -e "  ${II} - ${CURLABEL} @ ${ip}"
     done
+    echo
     echo -n "     "
     II=0
-    for ip in $IPADDRS ; do
+    for ip in $IS_IPADDRS ; do
         II=$(($II+1))
         echo -ne "  ${II}"
     done
@@ -188,10 +203,10 @@ function checkISConn()
     II=0
     IS_CONN_FAILURE=0
     FAIL_OUTPUT=""
-    for ip in $IPADDRS ; do
+    for ip in $IS_IPADDRS ; do
         II=$(($II+1))
         echo -ne "    ${II} "
-        for hosts in $HOSTIDS ; do
+        for hosts in $IS_HOSTIDS ; do
             RETURN=`su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -ne \"${PASS}\") || echo -ne \"${FAIL}\"'"`
             if [[ ${RETURN} == ${FAIL} ]] ; then
                 IS_CONN_FAILURE=1
@@ -248,7 +263,7 @@ function checkComputeZones()
         checkNetZones ${CURID}
         checkDataZones ${CURID}
         checkBackupJoin ${CURID}
-        echo '    -------------------'
+        echo '-----------------------'
     done
 }
 
@@ -346,9 +361,24 @@ function hvVersion()
 function timeZoneCheck()
 {
     local GEOTZ=`curl -s http://ip-api.com/json | sed -r -e 's/.+"timezone":"([^"]+?)".+/\1/g'`
-    local CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}`
-    ( [[ ${GEOTZ} != ${CURTZ} ]] && echo -e "${CHCK} Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}" ) \
-	 || echo -e "${PASS} Timezones appear to match: ${CURTZ}${nofo}"
+    local CURTZ=0
+
+    if [ $(which timedatectl &>/dev/null) ] ; then
+        CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}`
+    else if [ -f /etc/sysconfig/clock ] ; then
+            CURTZ=`grep ZONE /etc/sysconfig/clock | sed -r -e 's/ZONE="(.+?)"/\1/'`
+        fi
+    fi
+
+    if [[ ${CURTZ} == 0 ]] ; then
+        echo -e "${CHCK} Could not automatically detect time zone. Geolocated timezone is ${GEOTZ}"
+    else
+        if [[ ${GEOTZ} != ${CURTZ} ]] ; then
+            echo -e "${CHCK} Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}"
+        else
+	        echo -e "${PASS} Timezones appear to match: ${CURTZ}${nofo}"
+        fi
+    fi
 }
 
 # Check HV or BS status from control server
@@ -373,17 +403,20 @@ function resourceCheck()
 
 function checkHVHW()
 {
+    LABELS_TEMP=${LABELS}
+    echo -e "Checking hardware...${brown}\n"
     echo -e "HV,CPU Model,CPU MHz,CPU Cores${cyan}"
-    local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
-    local  LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
+    #local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
+    #local  LABELS=`runSQL "SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T" | sed -r -e ':a;N;$!ba;s/\n/,/g'`
     for ip in $IPADDRS ; do
-        local CURLABEL=`echo ${LABELS} | cut -d',' -f1`
-        LABELS=`echo ${LABELS} | sed -r -e 's/^[^,]+,//'`
+        local CURLABEL=`echo ${LABELS_TEMP} | cut -d',' -f1`
+        LABELS=`echo ${LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
         echo -ne "${CURLABEL}"
         echo -ne ","`su onapp -c 'grep model\ name /proc/cpuinfo -m1 | cut -d":" -f2'`
         echo -ne ","`su onapp -c 'grep cpu\ MHz /proc/cpuinfo -m1 | cut -d":" -f2 | cut -d"." -f1 | tr -d " "'`
         echo -e ","`su onapp -c 'grep cpu\ cores /proc/cpuinfo -m1 | cut -d":" -f2 | tr -d " "'`
     done
+    echo -e "${nofo}"
 }
 
 # Detect if root disk is over 100GB, for static hypervisors and control panel
@@ -404,9 +437,9 @@ function rootDiskSize()
 ###############################################
 ###############################################
 
-echo "-------------------------------------"
-echo -e "\033[0;37;44mOn\033[0;34;47mApp${nofo} Enterprise Quality Check Script"
-echo "-------------------------------------"
+echo "-----------------------------------------"
+echo -e "  \033[0;37;44mOn\033[0;34;47mApp${nofo} Enterprise Quality Check Script"
+echo "-----------------------------------------"
 echo
 echo "    Control Server System Information:"
 
@@ -562,14 +595,11 @@ echo -ne "${nofo}"
 
 # Check time zone
 timeZoneCheck
-echo
-echo '------------------------------------------'
-echo "Pulling table of hypervisor information..."
-runCheckHVandBS | column -s '|' -t
 
-echo -e "Checking hardware...${brown}\n"
+
+runCheckHVandBS | column -s '|' -t
 checkHVHW | column -s ',' -t -c4
-echo -e "${nofo}"
+
 
 if [ ${HW_ONLY} -eq 1 ] ; then
     exit 0
@@ -577,11 +607,10 @@ fi
 
 #check HV interconnectivity
 checkAllHVConn
+
 [ $STORE_ENABLED -eq 1 ] && checkISConn || echo 'Skipping storage check.'
 
 checkComputeZones
-
-
 
 if [ ${API_CALLS} -eq 1 ] ; then
   echo '----------------------------'
