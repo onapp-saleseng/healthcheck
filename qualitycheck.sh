@@ -134,11 +134,16 @@ function checkHVConn()
     #local IPADDRS=`runSQL "SELECT ip_address FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T"`
     for ip in $IPADDRS ; do
 #	if [ ${1} == ${ip} ] ; then
-	RETURN=`su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo -ne \"${PASS}\") || echo -ne \"${FAIL}\"'"`
-        if [[ ${RETURN} == ${FAIL} ]] ; then
+	RETURN=`su onapp -c "ssh ${SSHOPTS} root@${1} '(ping ${ip} -w1 2>&1 >/dev/null && echo -ne 1) || echo -ne 0' 2>/dev/null || echo 2"`
+        if [[ ${RETURN} == "0" ]] ; then
             HV_CONN_FAILURE=1
+            HV_FAIL_OUTPUT="${HV_FAIL_OUTPUT}\n${FAIL} ${1} cannot ping ${ip}"
+        else if [[ ${RETURN} == "2" ]] ; then
+            HV_CONN_FAILURE=1
+            HV_FAIL_OUTPUT="${HV_FAIL_OUTPUT}\n${FAIL} Cannot connect to ${1}"
         fi
-        echo -ne ${RETURN}
+        fi
+        [[ ${RETURN} == "1" ]] && echo -ne "${PASS}" || echo -ne "${FAIL}"
     done
     echo
 }
@@ -166,10 +171,11 @@ function checkAllHVConn()
     done
     echo -e "${nofo}\n"
     if [[ ${HV_CONN_FAILURE} == 1 ]] ; then
-        echo -e "${FAIL} A failure was detected, see above table for ${FAIL}, #'s are in system information table further above."
+        echo -e "    Not all hypervisors could ping each other. ${HV_FAIL_OUTPUT}"
     else
         echo -e "${PASS} All hypervisors can ping each other."
     fi
+    echo -e "\n"
 }
 
 function checkISConn()
@@ -204,19 +210,24 @@ function checkISConn()
         II=$(($II+1))
         echo -ne "    ${II} "
         for hosts in $IS_HOSTIDS ; do
-            RETURN=`su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -ne \"${PASS}\") || echo -ne \"${FAIL}\"'"`
-            if [[ ${RETURN} == ${FAIL} ]] ; then
+            RETURN=`su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -ne 1) || echo -ne 0' 2>/dev/null" || echo -ne 2`
+            if [[ ${RETURN} == "0" ]] ; then
                 IS_CONN_FAILURE=1
-                FAIL_OUTPUT="${FAIL_OUTPUT},${ip} cannot ping 10.200.${hosts}.254"
-            fi
-            echo -ne ${RETURN}
+                FAIL_OUTPUT="${FAIL_OUTPUT}\n${FAIL} ${ip} cannot ping 10.200.${hosts}.254"
+                echo -ne "${FAIL}"
+            else if [[ ${RETURN} = "2" ]] ; then
+                IS_CONN_FAILURE=1
+                FAIL_OUTPUT="${FAIL_OUTPUT}\n${FAIL} Cannot connect to ${ip}"
+                echo -ne "${FAIL}"
+            else
+                echo -ne "${PASS}"
+            fi fi
         done
         echo
     done
     echo -e ${nofo}
     if [[ ${IS_CONN_FAILURE} == 1 ]] ; then
-        echo -e "${FAIL} Not all hypervisors are able to ping each other over the storage network."
-        echo -e "${FAIL_OUTPUT}"
+        echo -e "    Not all hypervisors are able to ping each other over the storage network. ${FAIL_OUTPUT}"
     else
         echo -e "${PASS} All hypervisors can ping each other over the storage network."
     fi
@@ -346,11 +357,11 @@ function cpVersion()
 function hvVersion()
 {
     if [ -f /onapp/onapp-store-install.version ] ; then
-        cat /onapp/onapp-store-install.version
+        cat /onapp/onapp-store-install.version 2>/dev/null
     else if [ -f /onapp/onapp-hv-tools.version ] ; then
-            cat /onapp/onapp-hv-tools.version
+            cat /onapp/onapp-hv-tools.version 2>/dev/null
         else if [ -f /onappstore/package-version.txt ] ; then
-                grep Version /onappstore/package-version.txt
+                grep Version /onappstore/package-version.txt 2>/dev/null
             else
                 echo '????'
             fi
@@ -385,12 +396,12 @@ function timeZoneCheck()
 # Check HV or BS status from control server
 function checkHVBSStatus()
 {
-    (ping ${1} -w1 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
-    (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit'" 2>&1 >/dev/null && echo -ne "|YES") || echo -ne "|NO"
-    (nc ${1} 161  2>&1 >/dev/null </dev/null && echo -ne "|YES" ) || echo -ne "|NO"
-    echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} '$(typeset -f hvVersion);hvVersion'" | sed -r -e 's/.+: ([0-9]\.[0-9]).+/\1/'`
-    echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'uname -r 2>/dev/null'" 2>/dev/null`
-    echo -e "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /etc/redhat-release 2>/dev/null'" 2>/dev/null`
+    (ping ${1} -w1 2>&1 &>/dev/null && echo -ne "|YES") || echo -ne "|NO"
+    (su onapp -c "ssh ${SSHOPTS} root@${1} 'exit' &>/dev/null" &>/dev/null && echo -ne "|YES") || echo -ne "|NO"
+    (nc ${1} 161  &>/dev/null </dev/null && echo -ne "|YES" ) || echo -ne "|NO"
+    echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} '$(typeset -f hvVersion);hvVersion' 2>/dev/null"  2>/dev/null | sed -r -e 's/.+: ([0-9]\.[0-9]).+/\1/'`
+    echo -ne "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'uname -r 2>/dev/null' 2>/dev/null" 2>/dev/null`
+    echo -e "|"`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /etc/redhat-release 2>/dev/null' 2>/dev/null" 2>/dev/null`
 }
 
 # CPU Family / Vendor checker. Information comes in CSV
@@ -476,12 +487,12 @@ if [ -r ${FREEBSD_ISO_DIR}/freebsd-iso-url.list ] ; then
 			#echo -e "${green}${ISOS} is found."
 			:
 		else
-			echo -e "\t${lred}FreeBSD ${ISOS} is NOT found.${nofo}"
+			echo -e "${FAIL} FreeBSD ${ISOS} is NOT found."
 			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}FreeBSD ISO URL list does not exist. Please run install script.${nofo}"
+	echo -e "${FAIL} FreeBSD ISO URL list does not exist. Please run install script."
 	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
@@ -493,12 +504,12 @@ if [ -r ${GRUB_ISO_DIR}/grub-isos-url.list ] ; then
 			#echo -e "${green}Grub image ${ISOS} has been found."
 			:
 		else
-			echo -e "\t${lred}Grub image ${ISOS} has NOT been found.${nofo}"
+			echo -e "${FAIL} Grub image ${ISOS} has NOT been found."
 			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}Grub ISO URL list does not exist.${nofo}"
+	echo -e "${FAIL} Grub ISO URL list does not exist."
 	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
@@ -510,12 +521,12 @@ if [ -r ${RECOVERY_TEMPLATES_DIR}/recovery-templates-url.list ] ; then
 			#echo -e "${green}${ISOS} is found."
 			:
 		else
-			echo -e "\t${lred}Recovery template ${ISOS} is NOT found.${nofo}"
+			echo -e "${FAIL} Recovery template ${ISOS} is NOT found."
 			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}Recovery Template list does not exist.${nofo}"
+	echo -e "${FAIL} Recovery Template list does not exist."
 	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
@@ -527,12 +538,12 @@ if [ -r ${WINDOWS_SMART_DRIVERS_DIR} ] ; then
 			#echo -e "${green}${ISOS} is found."
 			:
 		else
-			echo -e "\t${lred}Windows driver image ${ISOS} is NOT found.${nofo}"
+			echo -e "${FAIL} Windows driver image ${ISOS} is NOT found."
 			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}Windows Smart Drivers list does not exist. Please run install script."
+	echo -e "${FAIL} Windows Smart Drivers list does not exist. Please run install script."
 	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
@@ -544,12 +555,12 @@ if [ -r ${LB_TEMPLATE_DIR}/lbva-template-url.list ] ; then
 			#echo -e "${green}${ISOS} is found."
 			:
 		else
-			echo -e "\t${lred}Load Balancer template ${ISOS} is NOT found.${nofo}"
+			echo -e "${FAIL} Load Balancer template ${ISOS} is NOT found."
 			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}Load Balancer template list does not exist.  Please run install script.${nofo}"
+	echo -e "${FAIL} Load Balancer template list does not exist.  Please run install script."
 	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
@@ -575,12 +586,12 @@ if [ -r ${CDN_TEMPLATE_DIR}/cdn-template-url.list ] ; then
 			#echo -e "${green}CDN Template ${ISOS} is found."
 			:
 		else
-			echo -e "\t${lred}CDN Template ${ISOS} is NOT found."
+			echo -e "${FAIL}CDN Template ${ISOS} is NOT found."
 			TEMP_FAIL=$TEMP_FAIL+1
 		fi
 	done
 else
-	echo -e "${red}CDN template list does not exist. Please run install script.${nofo}"
+	echo -e "${FAIL}CDN template list does not exist. Please run install script."
 	TEMP_FAIL=$TEMP_FAIL+1
 fi
 
