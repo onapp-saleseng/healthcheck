@@ -3,7 +3,7 @@
 ### What is this repository for? ###
 
 * An automated quality assurance/validation script for OnApp Enterprise Deployments
-* Ver 0.3
+* Ver 0.3.5
 
 ### What does this script do? ###
 
@@ -20,6 +20,9 @@
 * (0.2.5) Added failure checking for virtual machine creation
 * (0.3) Formatted hypervisor interconnectivity as a table
 * (0.3) Made output of checks more standard with [+], [-], and [?].
+* (0.3.5) Abstracted SQL queries further
+* (0.3.5) Foltered out vCenter/vCloud from network and join checks
+* (0.3.5) Various small fixes
 
 ### TO DO ###
 
