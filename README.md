@@ -5,6 +5,12 @@
 * An automated quality assurance/validation script for OnApp Enterprise Deployments
 * Ver 0.3.5
 
+### Usage ###
+
+* ./qualitycheck.sh [-h] [-a]
+* -h option will only check basic information and skip networking/etc.
+* -a option will utilize API to create and destroy a virtual machine automatically
+
 ### What does this script do? ###
 
 * Checks Control Server OnApp Versions, Kernel Version, CentOS Distribution, Time Zone, and Disk Size
