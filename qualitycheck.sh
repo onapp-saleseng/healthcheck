@@ -50,7 +50,7 @@ CFG='/onapp/onapp-cp-install/onapp-cp-install.conf'
 if [ -r $CFG ] ; then
 	. $CFG
 else
-	echo -e "\n${FAIL}CP Install Configuration file does not exist. \`yum install onapp-cp-install\` may not have been ran or the install script itself has not been ran."
+	echo -e "\n${FAIL} CP Install Configuration file does not exist. \`yum install onapp-cp-install\` may not have been ran or the install script itself has not been ran."
 	exit 1;
 fi
 
@@ -189,7 +189,7 @@ function checkISConn()
         II=$(($II+1))
         echo -ne "    ${II} "
         for hosts in $IS_HOSTIDS ; do
-            RETURN=`su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -ne 1) || echo -ne 0' 2>/dev/null" || echo -ne 2`
+            RETURN=`su onapp -c "ssh ${SSHOPTS} root@${ip} '(ping 10.200.${hosts}.254 -w1 2>&1 >/dev/null && echo -ne 1) || echo -n 0' 2>/dev/null" || echo -n 2`
             if [[ ${RETURN} == "0" ]] ; then
                 IS_CONN_FAILURE=1
                 FAIL_OUTPUT="${FAIL_OUTPUT}\n${FAIL} ${ip} cannot ping 10.200.${hosts}.254"
@@ -206,7 +206,7 @@ function checkISConn()
     done
     echo -e ${nofo}
     if [[ ${IS_CONN_FAILURE} == 1 ]] ; then
-        echo -e "    Not all hypervisors are able to ping each other over the storage network. ${FAIL_OUTPUT}"
+        echo -e "${FAIL} Not all hypervisors are able to ping each other over the storage network.\n ${FAIL_OUTPUT}"
     else
         echo -e "${PASS} All hypervisors can ping each other over the storage network."
     fi
