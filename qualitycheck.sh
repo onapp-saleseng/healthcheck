@@ -1,5 +1,7 @@
 #!/bin/bash
 
+CFG='/onapp/onapp-cp-install/onapp-cp-install.conf'
+
 # Script for automatically checking integrity of OnApp installations
 API_CALLS=0 ; HW_ONLY=0
 while [[ $# -gt 0 ]] ; do
@@ -20,6 +22,7 @@ while [[ $# -gt 0 ]] ; do
     esac
     shift
 done
+
 # Colors
 nofo='\e[0m'      #Regular
 bold='\e[1m'      #Regular bold
@@ -45,7 +48,6 @@ FAIL="${lred}[-]${nofo}"
 CHCK="${lbrown}[?]${nofo}"
 
 # Check for and include the install config file
-CFG='/onapp/onapp-cp-install/onapp-cp-install.conf'
 
 if [ -r $CFG ] ; then
 	. $CFG
@@ -380,13 +382,15 @@ function resourceCheck()
     local CPUMODEL=`grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'`
     local CPUSPEED=`grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '`
     local CPUCORES=`nproc --all`
+    if [ "x${CPUCORES}" == "x" ] ; then
+      CPUCORES=`lscpu | grep ^CPU\(s\) | awk {'print $2'}`
+    fi
     echo "${CPUMODEL},${CPUSPEED},${CPUCORES}"
 }
 
 function checkHVHW()
 {
     LABELS_TEMP=${LABELS}
-
     echo -e "HV,CPU Model,CPU MHz,CPU Cores${cyan}"
     for ip in $IPADDRS ; do
         local CURLABEL=`echo ${LABELS_TEMP} | cut -d',' -f1`
@@ -404,6 +408,33 @@ function rootDiskSize()
     ( [ `df -l -P -BG / | tail -1 | awk {'print $2'} | tr -d G` -ge 100 ] && echo -e "${PASS} Disk over 100GB" ) || echo -e "${FAIL} Disk under 100GB"
 }
 
+function checkTransactions()
+{
+    FAILED_TRANS=`runSQL "SELECT id, updated_at, action FROM transactions WHERE status='failed'"`
+    if [ "x${FAILED_TRANS}" == "x" ] ; then
+        echo "${PASS} No failed transactions."
+    else
+        echo "${CHCK} Failed transactions present: "
+    fi
+    echo -e "ID\tUpdated At\tAction\n${FAILED_TRANS}" | column -s '\t' -t 3
+}
+
+function checkLoadAvg()
+{
+    LOADAVG=`su onapp -c "ssh ${SSHOPTS} root@${1} 'cat /proc/loadavg' 2>/dev/null" 2>/dev/null`
+    echo "${LOADAVG}" | awk {'print $1" "$2" "$3" "$4'}
+}
+
+function checkAllLoadAvg()
+{
+    LABELS_TEMP=${LABELS}
+    for ip in $IPADDRS ; do
+        local CURLABEL=`echo ${LABELS_TEMP} | cut -d',' -f1`
+        LABELS_TEMP=`echo ${LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
+        CURLOAD=`checkLoadAvg ${ip}`
+        echo -ne "${CURLABEL}"
+    done
+}
 
 
 ###############################################
