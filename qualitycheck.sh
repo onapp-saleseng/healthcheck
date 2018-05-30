@@ -396,9 +396,9 @@ function checkHVHW()
         local CURLABEL=`echo ${LABELS_TEMP} | cut -d',' -f1`
         LABELS_TEMP=`echo ${LABELS_TEMP} | sed -r -e 's/^[^,]+,//'`
         echo -ne "${CURLABEL}"
-        echo -ne ","`su onapp -c 'grep model\ name /proc/cpuinfo -m1 | cut -d":" -f2'`
-        echo -ne ","`su onapp -c 'grep cpu\ MHz /proc/cpuinfo -m1 | cut -d":" -f2 | cut -d"." -f1 | tr -d " "'`
-        echo -e ","`nproc --all`
+        echo -ne ","`su onapp -c ssh root@${ip} 'grep model\ name /proc/cpuinfo -m1 | cut -d":" -f2'`
+        echo -ne ","`su onapp -c ssh root@${ip} 'grep cpu\ MHz /proc/cpuinfo -m1 | cut -d":" -f2 | cut -d"." -f1 | tr -d " "'`
+        echo -e ","`su onapp -c ssh root@${ip} 'nproc --all'`
     done
 }
 
@@ -478,8 +478,6 @@ else
 fi
 
 rootDiskSize
-
-
 
 # Check on control server for recovery and LoadBalancer templates
 TEMP_FAIL=0

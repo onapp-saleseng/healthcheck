@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import shlex
+import socket
 import random
 import argparse
 import subprocess
@@ -82,6 +83,13 @@ CHCK="{}[?]{}".format(colors.fg.orange, colors.reset)
 # HARDWARE_ONLY=args.hardware;
 # ONAPP_ROOT=args.onappdir;
 
+arp = argparse.ArgumentParser(prog='qualitycheck', description='Quality check for OnApp')
+arp.add_argument('-a', '--api', help='Enable API', action='store_true')
+arp.add_argument('-q', '--quiet', help='Hide regular output to terminal', action='store_true')
+args = arp.parse_args();
+API_ENABLED=args.api;
+QUIET=args.quiet;
+
 ONAPP_ROOT = '/onapp'
 
 ONAPP_CONF_DIR="{}/interface/config".format(ONAPP_ROOT);
@@ -125,6 +133,8 @@ def dRunQuery(q, unlist=True):
     if len(res) == 1 and unlist:
         if len(res[0]) == 1: return res[0][0];
         else: return res[0]
+    if len(res) == 0:
+        return False
     return res;
 
 dsql = dRunQuery;
@@ -188,7 +198,7 @@ def pullAPIKey():
 def pullAPIEmail():
     res = dsql("SELECT email FROM users WHERE id=1");
     if res == None:
-        print('Admin email was not able to be pulled. Skipping API functions.);
+        print('Admin email was not able to be pulled. Skipping API functions.');
         API_ENABLED=False;
     logger("Pulled API Email from database.");
     return res;
@@ -265,6 +275,109 @@ HOST_INFO=dpsql( \
   ORDER BY row_order, id) AS T")
 # LABELS=dsql("SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T")
 
+def runCmd(cmd, shell=False, shlexy=True):
+    if shlexy and type(cmd) is str:
+        cmd = shlex.split(cmd)
+    stdout, stderr = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate();
+    if stderr: logger("Command {} failed, stderr: {}".format(cmd, stderr.strip()))
+    return stdout.strip();
+
+def checkHVBSStatus(target):
+    # ping, ssh, SNMP, version, kernel, distro
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    rData = {};
+    ping_cmd = [ 'ping', target, '-w1' ]
+    ssh_cmd = [ 'su',  'onapp',  '-c', "ssh root@{} \'exit\'".format(target) ]
+    # snmp_cmd = [ 'nc', target, '161', '</dev/null' ]
+    hv_ver_bash_cmd = "ssh root@{} \"cat /onapp/onapp-store-install.version 2>/dev/null || cat /onapp/onapp-hv-tools.version 2>/dev/null || grep Version /onappstore/package-version.txt 2>/dev/null || echo '???'\""
+    hv_ver_cmd = [ 'su', 'onapp', '-c', hv_ver_bash_cmd.format(target) ]
+    hv_kernel_cmd = [ 'su', 'onapp', '-c', 'ssh root@{} "uname -r 2>/dev/null" 2>/dev/null'.format(target) ]
+    hv_distro_cmd = [ 'su', 'onapp', '-c', 'ssh root@{} "cat /etc/redhat-release 2>/dev/null" 2>/dev/null'.format(target) ]
+    #run all these, test them to make sure that they even work...
+    rData['ping'] = 0 if runCmd(ping_cmd) == '' else 1;
+    rData['ssh'] = 0 if runCmd(ssh_cmd) == '' else 1;
+    rData['snmp'] = 0 if sock.connect_ex((target, 161)) == 0 else 1;
+    rData['version'] = runCmd(hv_ver_cmd);
+    rData['kernel'] = runCmd(hv_kernel_cmd);
+    rData['distro'] = runCmd(hv_distro_cmd);
+    return rData;
+
+# def checkAllHVBS():
+#     hvData = [ checkHVBSStatus(h['ip_address']) for h in HOST_INFO ];
+#     return hvData;
+
+
+def checkHVConn(from_ip, to_ip):
+    cmd = "ssh root@{} 'ping -w1 {}'".format(from_ip, to_ip)
+    rData = runCmd(shlex.split(cmd))
+    return 0 if rData == '' else 1
+
+def checkNetJoins(zone_id):
+    network_ids = dsql("SELECT network_id FROM networking_network_joins WHERE target_join_id={}".format(zone_id), unlist=False)
+    if network_ids is False: return False
+    labels = [];
+    for nid in network_ids[0]:
+        network_label = dsql("SELECT label FROM networking_networks WHERE id={}".format(nid))
+        labels.append(network_label)
+    return labels;
+
+def checkDataJoins(zone_id):
+    datazone_ids = dsql("SELECT data_store_id FROM data_store_joins WHERE target_join_id={}".format(zone_id), unlist=False)
+    if datazone_ids is False: return False
+    labels = [];
+    for dzid in datazone_ids[0]:
+        datazone_label = dsql("SELECT label FROM data_stores WHERE id={}".format(dzid))
+        labels.append(datazone_label)
+    return labels;
+
+def checkBackupJoins(zone_id):
+    backup_ids = dsql("SELECT backup_server_id FROM backup_server_joins WHERE target_join_id={}".format(zone_id), unlist=False)
+    if backup_ids is False: return False
+    labels = [];
+    for bsid in backup_ids[0]:
+        backup_label = dsql("SELECT label FROM backup_servers WHERE id={}".format(bsid))
+        label.append(backup_label)
+    return labels;
+
+def checkComputeZones(zone_id=False):
+    zone_data = [];
+    zone_ids = dsql("SELECT id FROM packs WHERE type='HypervisorGroup'")
+    if zone_id is False and type(zone_ids) is not long:
+        all_zone_ids = dsql("SELECT id FROM packs WHERE type='HypervisorGroup'")
+        for zid in all_zone_ids:
+            vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zid))
+            if len(vc_check) == 0: continue
+            zone_data.append({'zone_id': zid, 'network_joins':checkNetJoins(zid), 'data_store_joins':checkDataJoins(zid), 'backup_server_joins':checkBackupJoins(zid)})
+        return zone_data;
+    elif type(zone_id) is list:
+        for zid in zone_id:
+            vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zid))
+            if len(vc_check) == 0: continue
+            zone_data.append({'zone_id':zid, 'network_joins':checkNetJoins(zid), 'data_store_joins':checkDataJoins(zid), 'backup_server_joins':checkBackupJoins(zid)})
+        return zone_data;
+    else:
+        if type(zone_ids) is long: zone_id = zone_ids;
+        vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zone_id))
+        if len(vc_check) == 0: raise OnappException('Requested hypervisor zone either does not exist or is all vcenter/vcloud')
+        return [{'zone_id':zone_id, 'network_joins':checkNetJoins(zone_id), 'data_store_joins':checkDataJoins(zone_id), 'backup_server_joins':checkBackupJoins(zone_id)}]
+
+
+def cpuCheck(target=False):
+    cpu_model_cmd="grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'"
+    cpu_speed_cmd="grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '"
+    cpu_cores_cmd="grep -c ^processor /proc/cpuinfo"
+    if target is False:
+        rData = { \
+        'model':runCmd("grep model\ name /proc/cpuinfo -m1").split(':')[1].strip(), \
+        'speed':runCmd("grep cpu\ MHz /proc/cpuinfo -m1").split(':')[1].strip(), \
+        'cores':runCmd("grep -c ^processor /proc/cpuinfo") }
+        return rData;
+    rData = {};
+    rData['model'] = runCmd(['su', 'onapp', '-c', 'ssh root@{} "{}"'.format(target, cpu_model_cmd)])
+    rData['speed'] = runCmd(['su', 'onapp', '-c', 'ssh root@{} "{}"'.format(target, cpu_speed_cmd)])
+    rData['cores'] = runCmd(['su', 'onapp', '-c', 'ssh root@{} "{}"'.format(target, cpu_cores_cmd)])
+    return rData;
+
 # checkallHVandBS
 # checkallHVconn
 # checkISconn
@@ -280,49 +393,49 @@ HOST_INFO=dpsql( \
 # rootDiskSize
 # checkTransactions
 # checkAllLoadAvg
-def runCmd(cmd):
-    if type(cmd) is str:
-        cmd = shlex.split(cmd)
-    stdout, stderr = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate();
-    # maybe check for stderr here?
-    return stdout;
 
-def checkAllHVBS():
-
-
-    # cmd = [ TEST_RB , 'test=destroy_hypervisor' ];
-    # cmd.append('mac='+mgt_mac);
-    #
-    # p = Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE);
-    # stdo, stde = p.communicate();
-
-
-def checkHVBSStatus(target):
-    # ping, ssh, SNMP, version, kernel, distro
-    rData = {};
-    ping_cmd = [ 'ping', target, '-w1' ]
-    ssh_cmd = [ 'su',  'onapp',  '-c', "ssh root@{} \'exit\'".format(target))
-    snmp_cmd = [ 'nc', target, '161', '</dev/null' ]
-    hv_ver_bash_cmd = "ssh root@{} \"cat /onapp/onapp-store-install.version 2>/dev/null || cat /onapp/onapp-hv-tools.version 2>/dev/null || grep Version /onappstore/package-version.txt 2>/dev/null || echo '???'\""
-    hv_ver_cmd = [ 'su', 'onapp', '-c', hv_ver_bash_cmd.format(target) ]
-    hv_kernel_cmd = [ 'su', 'onapp', '-c', 'ssh root@{} "uname -r 2>/dev/null" 2>/dev/null'.format(target) ]
-    hv_distro_cmd = [ 'su', 'onapp', '-c', 'ssh root@{} "cat /etc/redhat-release 2>/dev/null" 2>/dev/null'.format(target) ]
-    #run all these, test them to make sure that they even work...
-    rData['ping'] = runCmd(ping_cmd);
-    rData['ssh'] = runCmd(ssh_cmd);
-    rData['snmp'] = runCmd(snmp_cmd);
-    rData['version'] = runCmd(hv_ver_cmd);
-    rData['kernel'] = runCmd(hv_kernel_cmd);
-    rData['distro'] = runCmd(hv_distro_cmd);
-    return rData;
+# function timeZoneCheck()
+# {
+#     local GEOTZ=`curl -s http://ip-api.com/json | sed -r -e 's/.+"timezone":"([^"]+?)".+/\1/g'`
+#     local CURTZ=0
+#
+#     if [ $(which timedatectl &>/dev/null) ] ; then
+#         CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}`
+#     else if [ -f /etc/sysconfig/clock ] ; then
+#             CURTZ=`grep ZONE /etc/sysconfig/clock | sed -r -e 's/ZONE="(.+?)"/\1/'`
+#         fi
+#     fi
+#
+#     if [[ ${CURTZ} == 0 ]] ; then
+#         echo -e "${CHCK} Could not automatically detect time zone. Geolocated timezone is ${GEOTZ}"
+#     else
+#         if [[ ${GEOTZ} != ${CURTZ} ]] ; then
+#             echo -e "${CHCK} Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}"
+#         else
+# 	        echo -e "${PASS} Timezones appear to match: ${CURTZ}${nofo}"
+#         fi
+#     fi
+# }
 
 #
-# def checkAllHVBS():
-#     hvData = [ checkHVBSStatus(h['ip_address']) for h in HOST_INFO ];
-#     return hvData;
+# timeZone = runCmd("if [ $(which timedatectl &>/dev/null) ] ; then ;CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}` ;else if [ -f /etc/sysconfig/clock ] ; then ;CURTZ=`grep ZONE /etc/sysconfig/clock | sed -r -e 's/ZONE=\"(.+?)\"/\1/'` ; fi ; fi", shell=True, shlexy=False)
 
+health_data = {}
+health_data['cp_data'] = { 'version' : runCmd("rpm -qa onapp-cp") , 'kernel': runCmd("uname -r") , \
+    'distro' : runCmd("cat /etc/redhat-release") , \
+    'memory' : runCmd("free -m | grep Mem | awk {'print $2'}", shell=True, shlexy=False) , \
+    'timezone' : runCmd("readlink /etc/localtime").lstrip('../usr/share/zoneinfo/') , \
+    'cpu': cpuCheck() }
+health_data['hypervisors'] = []
+health_data['connectivity'] = []
+for hv in HOST_INFO:
+    tmp = checkHVBSStatus(hv['ip_address'])
+    tmp['id'] = hv['id']
+    tmp['ip_address'] = hv['ip_address']
+    tmp['label'] = hv['label']
+    tmp['cpu'] = cpuCheck(hv['ip_address'])
+    health_data['hypervisors'].append(tmp)
+    health_data['connectivity'].append([ checkHVConn(hv['ip_address'], t['ip_address']) for t in HOST_INFO])
+health_data['zone_joins'] = checkComputeZones();
 
-def checkHVConn(from_ip, target='all'):
-    if target == 'all':
-        for h in HOST_INFO:
-            
+print health_data
