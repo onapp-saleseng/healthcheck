@@ -5,11 +5,10 @@ import shlex
 import socket
 import random
 import argparse
+import datetime
 import subprocess
 import MySQLdb as SQL
 # from subprocess import call, Popen
-from datetime import datetime
-
 
 class colors:
     '''Colors class:
@@ -64,7 +63,7 @@ class OnappException(Exception):
 
 def logger(s):
     l = open(LOG_FILE, "a");
-    text = '[{}] - {}\n'.format(str(datetime.now()),s)
+    text = '[{}] - {}\n'.format(str(datetime.datetime.now()),s)
     l.write(text)
     l.flush();
     l.close();
@@ -85,10 +84,10 @@ CHCK="{}[?]{}".format(colors.fg.orange, colors.reset)
 
 arp = argparse.ArgumentParser(prog='qualitycheck', description='Quality check for OnApp')
 arp.add_argument('-a', '--api', help='Enable API', action='store_true')
-arp.add_argument('-q', '--quiet', help='Hide regular output to terminal', action='store_true')
+arp.add_argument('-v', '--verbose', help='Output more info while running', action='store_true')
 args = arp.parse_args();
 API_ENABLED=args.api;
-QUIET=args.quiet;
+VERBOSE=args.verbose;
 
 ONAPP_ROOT = '/onapp'
 
@@ -124,10 +123,12 @@ def dbConn(conf=None):
     return SQL.connect(host=conf['host'], user=conf['username'], passwd=conf['password'], db=conf['database'])
 
 def dRunQuery(q, unlist=True):
+    logger("Runnning query: {}".format(q))
+    if VERBOSE: print("Running query:{}".format(q))
     db = dbConn();
     cur = db.cursor();
     cur.execute(q)
-    res = cur.fetchall();
+    res = [row for row in cur.fetchall()];
     cur.close();
     db.close();
     if len(res) == 1 and unlist:
@@ -159,12 +160,18 @@ def dRunPrettyQueryLegacy(fields, table, conditions=None):
     for n, r in enumerate(res):
         o = {}
         for nn, fld in enumerate(field_names):
-            o[fld] = res[n][nn];
+            if type(res[n][nn]) is datetime.datetime:
+                o[fld] = str(res[n][nn])
+            else:
+                o[fld] = res[n][nn];
         output.append(o)
     if len(output) == 1: return output[0]
+    if len(output) == 0: return False;
     return output;
 
 def dRunPrettyQuery(q):
+    logger("Running pretty query: {}".format(d))
+    if VERBOSE: print("Running pretty query: {}".format(d))
     db = dbConn();
     cur = db.cursor();
     cur.execute(q)
@@ -179,9 +186,13 @@ def dRunPrettyQuery(q):
     for n, r in enumerate(res):
         o = {}
         for nn, fld in enumerate(field_names):
-            o[fld] = res[n][nn];
+            if type(res[n][nn]) is datetime.datetime:
+                o[fld] = str(res[n][nn])
+            else:
+                o[fld] = res[n][nn];
         output.append(o)
     if len(output) == 1: return output[0]
+    if len(output) == 0: return False;
     return output;
 
 
@@ -219,6 +230,7 @@ def apiCall(r, data=None, method=None, target=None, auth=None):
     status = response.getcode()
     caller = inspect.stack()[1][3];
     logger('API Call executed - {}{}, Status code: {}'.format(target, r, status));
+    if VERBOSE: print('API Call executed - {}{}, Status code: {}'.format(target, r, status))
     if status == 200:
         return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
     elif status == 204:
@@ -257,8 +269,6 @@ IS_HOST_INFO=dpsql( \
   AND enabled=1 AND ip_address IN \
     (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) \
   ORDER BY row_order, id) AS T")
-# IS_HOSTIDS=dsql("SELECT host_id FROM (SELECT id, host_id, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, host_id, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T")
-# IS_LABELS=dsql("SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM hypervisors WHERE ip_address IS NOT NULL AND host_id IS NOT NULL AND enabled=1 AND ip_address IN (SELECT ip_address FROM backup_servers) ORDER BY row_order, id) AS T")
 HOST_INFO=dpsql( \
 "SELECT id, label, ip_address FROM ( \
   SELECT id, label, ip_address, 1 AS row_order \
@@ -273,7 +283,7 @@ HOST_INFO=dpsql( \
   WHERE ip_address IS NOT NULL  \
   AND enabled=1 \
   ORDER BY row_order, id) AS T")
-# LABELS=dsql("SELECT label FROM (SELECT id, label, ip_address, 1 AS row_order FROM hypervisors WHERE hypervisor_type IN ('kvm','xen') AND ip_address IS NOT NULL AND enabled=1 AND ip_address NOT IN (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) UNION SELECT id, label, ip_address, 2 AS row_order FROM backup_servers WHERE ip_address IS NOT NULL AND enabled=1 ORDER BY row_order, id) AS T")
+
 
 def runCmd(cmd, shell=False, shlexy=True):
     if shlexy and type(cmd) is str:
@@ -301,11 +311,6 @@ def checkHVBSStatus(target):
     rData['kernel'] = runCmd(hv_kernel_cmd);
     rData['distro'] = runCmd(hv_distro_cmd);
     return rData;
-
-# def checkAllHVBS():
-#     hvData = [ checkHVBSStatus(h['ip_address']) for h in HOST_INFO ];
-#     return hvData;
-
 
 def checkHVConn(from_ip, to_ip):
     cmd = "ssh root@{} 'ping -w1 {}'".format(from_ip, to_ip)
@@ -362,6 +367,9 @@ def checkComputeZones(zone_id=False):
         return [{'zone_id':zone_id, 'network_joins':checkNetJoins(zone_id), 'data_store_joins':checkDataJoins(zone_id), 'backup_server_joins':checkBackupJoins(zone_id)}]
 
 
+    # TODO: Make it also spew out the label with the zone
+
+
 def cpuCheck(target=False):
     cpu_model_cmd="grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'"
     cpu_speed_cmd="grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '"
@@ -377,6 +385,7 @@ def cpuCheck(target=False):
     rData['speed'] = runCmd(['su', 'onapp', '-c', 'ssh root@{} "{}"'.format(target, cpu_speed_cmd)])
     rData['cores'] = runCmd(['su', 'onapp', '-c', 'ssh root@{} "{}"'.format(target, cpu_cores_cmd)])
     return rData;
+
 
 # checkallHVandBS
 # checkallHVconn
@@ -394,48 +403,44 @@ def cpuCheck(target=False):
 # checkTransactions
 # checkAllLoadAvg
 
-# function timeZoneCheck()
-# {
-#     local GEOTZ=`curl -s http://ip-api.com/json | sed -r -e 's/.+"timezone":"([^"]+?)".+/\1/g'`
-#     local CURTZ=0
-#
-#     if [ $(which timedatectl &>/dev/null) ] ; then
-#         CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}`
-#     else if [ -f /etc/sysconfig/clock ] ; then
-#             CURTZ=`grep ZONE /etc/sysconfig/clock | sed -r -e 's/ZONE="(.+?)"/\1/'`
-#         fi
-#     fi
-#
-#     if [[ ${CURTZ} == 0 ]] ; then
-#         echo -e "${CHCK} Could not automatically detect time zone. Geolocated timezone is ${GEOTZ}"
-#     else
-#         if [[ ${GEOTZ} != ${CURTZ} ]] ; then
-#             echo -e "${CHCK} Timezones don't seem the same, check that ${GEOTZ} = ${CURTZ}"
-#         else
-# 	        echo -e "${PASS} Timezones appear to match: ${CURTZ}${nofo}"
-#         fi
-#     fi
-# }
+if __name__ == "__main__":
+    health_data = {}
+    health_data['cp_data'] = { 'version' : runCmd("rpm -qa onapp-cp") , 'kernel': runCmd("uname -r") , \
+        'distro' : runCmd("cat /etc/redhat-release") , \
+        'memory' : runCmd("free -m | grep Mem | awk {'print $2'}", shell=True, shlexy=False) , \
+        'timezone' : runCmd("readlink /etc/localtime").lstrip('../usr/share/zoneinfo/') , \
+        'cpu' : cpuCheck()}
+    health_data['cp_data']['vm_data'] = { \
+        'off' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=0') ,\
+        'on' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=1') ,\
+        'failed' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE state="failed"') }
+    health_data['hypervisors'] = []
+    health_data['connectivity'] = []
+    for hv in HOST_INFO:
+        tmp = checkHVBSStatus(hv['ip_address'])
+        tmp['id'] = hv['id']
+        tmp['ip_address'] = hv['ip_address']
+        tmp['label'] = hv['label']
+        tmp['cpu'] = cpuCheck(hv['ip_address'])
+        health_data['hypervisors'].append(tmp)
+        health_data['connectivity'].append([ checkHVConn(hv['ip_address'], t['ip_address']) for t in HOST_INFO])
+    health_data['zone_joins'] = checkComputeZones();
 
-#
-# timeZone = runCmd("if [ $(which timedatectl &>/dev/null) ] ; then ;CURTZ=`timedatectl | grep Time\ zone | awk {'print $3'}` ;else if [ -f /etc/sysconfig/clock ] ; then ;CURTZ=`grep ZONE /etc/sysconfig/clock | sed -r -e 's/ZONE=\"(.+?)\"/\1/'` ; fi ; fi", shell=True, shlexy=False)
+    tran_query = "SELECT \
+        action, associated_object_type, associated_object_id, \
+        created_at, started_at, updated_at, log_output \
+      FROM transactions WHERE status='{}' ORDER BY created_at"
+    failed_trans=dpsql(tran_query.format("failed"))
+    pending_trans=dpsql(tran_query.format("pending"))
 
-health_data = {}
-health_data['cp_data'] = { 'version' : runCmd("rpm -qa onapp-cp") , 'kernel': runCmd("uname -r") , \
-    'distro' : runCmd("cat /etc/redhat-release") , \
-    'memory' : runCmd("free -m | grep Mem | awk {'print $2'}", shell=True, shlexy=False) , \
-    'timezone' : runCmd("readlink /etc/localtime").lstrip('../usr/share/zoneinfo/') , \
-    'cpu': cpuCheck() }
-health_data['hypervisors'] = []
-health_data['connectivity'] = []
-for hv in HOST_INFO:
-    tmp = checkHVBSStatus(hv['ip_address'])
-    tmp['id'] = hv['id']
-    tmp['ip_address'] = hv['ip_address']
-    tmp['label'] = hv['label']
-    tmp['cpu'] = cpuCheck(hv['ip_address'])
-    health_data['hypervisors'].append(tmp)
-    health_data['connectivity'].append([ checkHVConn(hv['ip_address'], t['ip_address']) for t in HOST_INFO])
-health_data['zone_joins'] = checkComputeZones();
+    if pending_trans is False:
+        pending_trans = [];
+    if failed_trans is False:
+        failed_trans = [];
 
-print health_data
+    health_data['transactions'] = {}
+    health_data['transactions']['pending'] = pending_trans;
+    health_data['transactions']['failed'] = failed_trans;
+
+    print json.dumps(health_data, indent=2)
+    logger(json.dumps(health_data))
