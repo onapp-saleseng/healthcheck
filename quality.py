@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import shlex
+import base64
 import socket
 import random
 import argparse
@@ -171,8 +172,8 @@ def dRunPrettyQueryLegacy(fields, table, conditions=None):
     return output;
 
 def dRunPrettyQuery(q):
-    logger("Running pretty query: {}".format(d))
-    if VERBOSE: print("Running pretty query: {}".format(d))
+    logger("Running pretty query: {}".format(q))
+    if VERBOSE: print("Running pretty query: {}".format(q))
     db = dbConn();
     cur = db.cursor();
     cur.execute(q)
