@@ -83,10 +83,11 @@ CHCK="{}[?]{}".format(colors.fg.orange, colors.reset)
 # ONAPP_ROOT=args.onappdir;
 
 arp = argparse.ArgumentParser(prog='qualitycheck', description='Quality check for OnApp')
-arp.add_argument('-a', '--api', help='Enable API', action='store_true')
+# arp.add_argument('-a', '--api', help='Enable API', action='store_true')
 arp.add_argument('-v', '--verbose', help='Output more info while running', action='store_true')
+arp.add_argument('-t', '--transactions', help='View N previous days of transactions, default: 7', type=int, metavar='N', default=7)
 args = arp.parse_args();
-API_ENABLED=args.api;
+API_ENABLED=True; #args.api;
 VERBOSE=args.verbose;
 
 ONAPP_ROOT = '/onapp'
@@ -269,6 +270,7 @@ IS_HOST_INFO=dpsql( \
   AND enabled=1 AND ip_address IN \
     (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) \
   ORDER BY row_order, id) AS T")
+
 HOST_INFO=dpsql( \
 "SELECT id, label, ip_address FROM ( \
   SELECT id, label, ip_address, 1 AS row_order \
@@ -386,6 +388,25 @@ def cpuCheck(target=False):
     rData['cores'] = runCmd(['su', 'onapp', '-c', 'ssh root@{} "{}"'.format(target, cpu_cores_cmd)])
     return rData;
 
+# things I still need to do
+# total vms on/off
+# total vms per hv on/off
+# change transactions to be the last X days
+# connectivity for integrated storage hosts
+# data store disk count and usage, orphan disks
+# integrated storage degraded orphaned disks
+#
+#
+# maybe orphaned backups as well,
+# print out remove commands?
+
+
+
+
+
+
+
+
 
 # checkallHVandBS
 # checkallHVconn
@@ -422,6 +443,10 @@ if __name__ == "__main__":
         tmp['ip_address'] = hv['ip_address']
         tmp['label'] = hv['label']
         tmp['cpu'] = cpuCheck(hv['ip_address'])
+        tmp['vm_data'] = { \
+            'off' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=0 AND hypervisor_id={}'.format(hv['id'])) ,\
+            'on' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=1 AND hypervisor_id={}'.format(hv['id'])) ,\
+            'failed' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE state="failed" AND hypervisor_id={}'.format(hv['id'])) }
         health_data['hypervisors'].append(tmp)
         health_data['connectivity'].append([ checkHVConn(hv['ip_address'], t['ip_address']) for t in HOST_INFO])
     health_data['zone_joins'] = checkComputeZones();
