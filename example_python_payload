@@ -1,0 +1,216 @@
+{'cp_data': {'kernel': '3.10.0-862.3.3.el7.x86_64', 'transactions': {'failed': [{'associated_object_id': 1L, 'created_at': '2018-05-30 19:47:06', 'associated_object_type': 'VirtualMachine', 'updated_at': '2018-05-30 19:47:51', 'log_output': "Remote Server: 10.0.0.2\nRunning: readlink -f /onapp/backups\n/onapp/backups\nRunning: mountpoint /onapp/backups/\nmountpoint: /onapp/backups/: No such file or directory\nRunning: mountpoint /onapp/\n/onapp/ is not a mountpoint\nFatal: /onapp/backups is not mounted on HV\nExecuting Rollback...\nRemote Server: 10.0.0.2\nRunning: umount /mnt/onapp-tmp-my7ld523nvkas1/\numount: /mnt/onapp-tmp-my7ld523nvkas1/: mountpoint not found\nRunning: kpartx -s -d -p X /dev/f17k4xqgpojcln/my7ld523nvkas1\nfailed to stat() /dev/f17k4xqgpojcln/my7ld523nvkas1\nCan't perform rollback: OnApp::Actions::Fatal Execution of kpartx -s -d -p X /dev/f17k4xqgpojcln/my7ld523nvkas1 failed", 'action': 'provisioning', 'started_at': '2018-05-30 19:47:51'}, {'associated_object_id': 1L, 'created_at': '2018-05-30 19:56:48', 'associated_object_type': 'VirtualMachine', 'updated_at': '2018-05-30 19:57:12', 'log_output': "Remote Server: 10.0.0.2\nRunning: readlink -f /onapp/backups\n/onapp/backups\nRunning: mountpoint /onapp/backups/\nmountpoint: /onapp/backups/: No such file or directory\nRunning: mountpoint /onapp/\n/onapp/ is not a mountpoint\nFatal: /onapp/backups is not mounted on HV\nExecuting Rollback...\nRemote Server: 10.0.0.2\nRunning: umount /mnt/onapp-tmp-my7ld523nvkas1/\numount: /mnt/onapp-tmp-my7ld523nvkas1/: mountpoint not found\nRunning: kpartx -s -d -p X /dev/f17k4xqgpojcln/my7ld523nvkas1\nfailed to stat() /dev/f17k4xqgpojcln/my7ld523nvkas1\nCan't perform rollback: OnApp::Actions::Fatal Execution of kpartx -s -d -p X /dev/f17k4xqgpojcln/my7ld523nvkas1 failed", 'action': 'provisioning', 'started_at': '2018-05-30 19:57:11'}, {'associated_object_id': 2L, 'created_at': '2018-06-18 18:07:27', 'associated_object_type': 'VirtualMachine', 'updated_at': '2018-06-18 18:08:14', 'log_output': "Remote Server: 10.0.0.2\nRunning: readlink -f /onapp/backups\n/onapp/backups\nRunning: mountpoint /onapp/backups/\nmountpoint: /onapp/backups/: No such file or directory\nRunning: mountpoint /onapp/\n/onapp/ is not a mountpoint\nFatal: /onapp/backups is not mounted on HV\nExecuting Rollback...\nRemote Server: 10.0.0.2\nRunning: umount /mnt/onapp-tmp-53ztxwae48q0ru/\numount: /mnt/onapp-tmp-53ztxwae48q0ru/: mountpoint not found\nRunning: kpartx -s -d -p X /dev/f17k4xqgpojcln/53ztxwae48q0ru\nfailed to stat() /dev/f17k4xqgpojcln/53ztxwae48q0ru\nCan't perform rollback: OnApp::Actions::Fatal Execution of kpartx -s -d -p X /dev/f17k4xqgpojcln/53ztxwae48q0ru failed", 'action': 'provisioning', 'started_at': '2018-06-18 18:08:14'}, {'associated_object_id': 2L, 'created_at': '2018-06-18 18:09:48', 'associated_object_type': 'VirtualMachine', 'updated_at': '2018-06-18 18:10:12', 'log_output': "Remote Server: 10.0.0.6\nRunning: readlink -f /onapp/backups\n/onapp/backups\nRunning: mountpoint /onapp/backups/\nmountpoint: /onapp/backups/: No such file or directory\nRunning: mountpoint /onapp/\n/onapp/ is not a mountpoint\nFatal: /onapp/backups is not mounted on HV\nExecuting Rollback...\nRemote Server: 10.0.0.6\nRunning: umount /mnt/onapp-tmp-53ztxwae48q0ru/\numount: /mnt/onapp-tmp-53ztxwae48q0ru/: mountpoint not found\nRunning: kpartx -s -d -p X /dev/f17k4xqgpojcln/53ztxwae48q0ru\nfailed to stat() /dev/f17k4xqgpojcln/53ztxwae48q0ru\nCan't perform rollback: OnApp::Actions::Fatal Execution of kpartx -s -d -p X /dev/f17k4xqgpojcln/53ztxwae48q0ru failed", 'action': 'provisioning', 'started_at': '2018-06-18 18:10:12'}, {'associated_object_id': 2L, 'created_at': '2018-06-27 21:59:09', 'associated_object_type': 'VirtualMachine', 'updated_at': '2018-06-27 21:59:44', 'log_output': None, 'action': 'take_backup', 'started_at': '2018-06-27 21:59:09'}], 'pending': []}, 'zones': {3L: {'data_store_joins': ['ISDS1'], 'backup_server_joins': ['BS1'], 'network_joins': ['NET1'], 'label': 'Default Compute Zone', 'hypervisors': {1L: {'vm_data': {'on': 1L, 'off': 1L, 'failed': 0L}, 'kernel': '3.10.0-693.17.1.el7.x86_64', 'ping': 1, 'cpu': {'cores': '4', 'model': 'Intel(R) Xeon(R) CPU D-1521 @ 2.40GHz', 'speed': '2399'}, 'snmp': 1, 'label': 'HV01', 'ip_address': '10.0.0.2', 'connectivity': {'all': {1L: 1, 2L: 1, 'B1': 1}, 'storage_network': {1L: 1, 2L: 1, 'B1': 1}}, 'version': '5.5.0-45', 'ssh': 1, 'memory': '7983', 'loadavg': '0.00 0.10 0.14 1/237 21837', 'type': 'kvm', 'id': 1L, 'freemem': '1227', 'distro': 'CentOS Linux release 7.3.1611 (Core)'}, 2L: {'vm_data': {'on': 0L, 'off': 0L, 'failed': 0L}, 'kernel': '3.10.0-693.17.1.el7.x86_64', 'ping': 1, 'cpu': {'cores': '4', 'model': 'Intel(R) Xeon(R) CPU D-1521 @ 2.40GHz', 'speed': '2399'}, 'snmp': 1, 'label': 'HV02', 'ip_address': '10.0.0.4', 'connectivity': {'all': {1L: 1, 2L: 1, 'B1': 1}, 'storage_network': {1L: 1, 2L: 1, 'B1': 1}}, 'version': '5.5.0-45', 'ssh': 1, 'memory': '7983', 'loadavg': '0.13 0.20 0.20 1/213 2872', 'type': 'kvm', 'id': 2L, 'freemem': '666', 'distro': 'CentOS Linux release 7.3.1611 (Core)'}}, 'data_stores': {1L: {'io_limits': None, 'is_cache_settings': None, 'data_store_size': 500.0, 'local_hypervisor_id': None, 'db_disk_size_total': 6, 'disk_count': 2L, 'label': 'ISDS1', 'hypervisor_group_id': 3L, 'data_store_type': 'is', 'zombie_disks': ['18ko5g0apcr7jv'], 'is_cache_enabled': 0, 'identifier': 'f17k4xqgpojcln', 'id': 1L, 'average_node_usage': 0}}, 'backup_servers': {1L: {'kernel': '3.10.0-693.17.1.el7.x86_64', 'ping': 1, 'snmp': 1, 'label': 'BS1', 'connectivity': {'all': {1L: 1, 2L: 1, 'B1': 1}, 'storage_network': {1L: 1, 2L: 1, 'B1': 1}}, 'version': '5.5.0-45', 'ssh': 1, 'memory': '3951', 'loadavg': '0.00 0.01 0.05 1/203 18440', 'ip_address': '10.0.0.6', 'cpu': {'cores': '4', 'model': 'Intel(R) Xeon(R) CPU D-1521 @ 2.40GHz', 'speed': '2399'}, 'freemem': '161', 'distro': 'CentOS Linux release 7.3.1611 (Core)'}}, 'zone_id': 3L}}, 'vm_data': {'on': 1L, 'off': 1L, 'failed': 0L}, 'timezone': 'America/Denver', 'loadavg': '0.07 0.08 0.08 1/715 23173', 'freemem': '5290', 'version': 'onapp-cp-5.6.0-83.noarch', 'memory': '15885', 'cpu': {'cores': '6', 'model': 'Intel(R) Xeon(R) CPU D-1521 @ 2.40GHz', 'speed': '2399.998'}, 'distro': 'CentOS Linux release 7.5.1804 (Core)'}}
+
+{
+  "cp_data": {
+    "kernel": "3.10.0-862.3.3.el7.x86_64", 
+    "transactions": {
+      "failed": [
+        {
+          "associated_object_id": 1, 
+          "created_at": "2018-05-30 19:47:06", 
+          "associated_object_type": "VirtualMachine", 
+          "updated_at": "2018-05-30 19:47:51", 
+          "log_output": "Remote Server: 10.0.0.2\nRunning: readlink -f /onapp/backups\n/onapp/backups\nRunning: mountpoint /onapp/backups/\nmountpoint: /onapp/backups/: No such file or directory\nRunning: mountpoint /onapp/\n/onapp/ is not a mountpoint\nFatal: /onapp/backups is not mounted on HV\nExecuting Rollback...\nRemote Server: 10.0.0.2\nRunning: umount /mnt/onapp-tmp-my7ld523nvkas1/\numount: /mnt/onapp-tmp-my7ld523nvkas1/: mountpoint not found\nRunning: kpartx -s -d -p X /dev/f17k4xqgpojcln/my7ld523nvkas1\nfailed to stat() /dev/f17k4xqgpojcln/my7ld523nvkas1\nCan't perform rollback: OnApp::Actions::Fatal Execution of kpartx -s -d -p X /dev/f17k4xqgpojcln/my7ld523nvkas1 failed", 
+          "action": "provisioning", 
+          "started_at": "2018-05-30 19:47:51"
+        }, 
+        {
+          "associated_object_id": 1, 
+          "created_at": "2018-05-30 19:56:48", 
+          "associated_object_type": "VirtualMachine", 
+          "updated_at": "2018-05-30 19:57:12", 
+          "log_output": "Remote Server: 10.0.0.2\nRunning: readlink -f /onapp/backups\n/onapp/backups\nRunning: mountpoint /onapp/backups/\nmountpoint: /onapp/backups/: No such file or directory\nRunning: mountpoint /onapp/\n/onapp/ is not a mountpoint\nFatal: /onapp/backups is not mounted on HV\nExecuting Rollback...\nRemote Server: 10.0.0.2\nRunning: umount /mnt/onapp-tmp-my7ld523nvkas1/\numount: /mnt/onapp-tmp-my7ld523nvkas1/: mountpoint not found\nRunning: kpartx -s -d -p X /dev/f17k4xqgpojcln/my7ld523nvkas1\nfailed to stat() /dev/f17k4xqgpojcln/my7ld523nvkas1\nCan't perform rollback: OnApp::Actions::Fatal Execution of kpartx -s -d -p X /dev/f17k4xqgpojcln/my7ld523nvkas1 failed", 
+          "action": "provisioning", 
+          "started_at": "2018-05-30 19:57:11"
+        }, 
+        {
+          "associated_object_id": 2, 
+          "created_at": "2018-06-18 18:07:27", 
+          "associated_object_type": "VirtualMachine", 
+          "updated_at": "2018-06-18 18:08:14", 
+          "log_output": "Remote Server: 10.0.0.2\nRunning: readlink -f /onapp/backups\n/onapp/backups\nRunning: mountpoint /onapp/backups/\nmountpoint: /onapp/backups/: No such file or directory\nRunning: mountpoint /onapp/\n/onapp/ is not a mountpoint\nFatal: /onapp/backups is not mounted on HV\nExecuting Rollback...\nRemote Server: 10.0.0.2\nRunning: umount /mnt/onapp-tmp-53ztxwae48q0ru/\numount: /mnt/onapp-tmp-53ztxwae48q0ru/: mountpoint not found\nRunning: kpartx -s -d -p X /dev/f17k4xqgpojcln/53ztxwae48q0ru\nfailed to stat() /dev/f17k4xqgpojcln/53ztxwae48q0ru\nCan't perform rollback: OnApp::Actions::Fatal Execution of kpartx -s -d -p X /dev/f17k4xqgpojcln/53ztxwae48q0ru failed", 
+          "action": "provisioning", 
+          "started_at": "2018-06-18 18:08:14"
+        }, 
+        {
+          "associated_object_id": 2, 
+          "created_at": "2018-06-18 18:09:48", 
+          "associated_object_type": "VirtualMachine", 
+          "updated_at": "2018-06-18 18:10:12", 
+          "log_output": "Remote Server: 10.0.0.6\nRunning: readlink -f /onapp/backups\n/onapp/backups\nRunning: mountpoint /onapp/backups/\nmountpoint: /onapp/backups/: No such file or directory\nRunning: mountpoint /onapp/\n/onapp/ is not a mountpoint\nFatal: /onapp/backups is not mounted on HV\nExecuting Rollback...\nRemote Server: 10.0.0.6\nRunning: umount /mnt/onapp-tmp-53ztxwae48q0ru/\numount: /mnt/onapp-tmp-53ztxwae48q0ru/: mountpoint not found\nRunning: kpartx -s -d -p X /dev/f17k4xqgpojcln/53ztxwae48q0ru\nfailed to stat() /dev/f17k4xqgpojcln/53ztxwae48q0ru\nCan't perform rollback: OnApp::Actions::Fatal Execution of kpartx -s -d -p X /dev/f17k4xqgpojcln/53ztxwae48q0ru failed", 
+          "action": "provisioning", 
+          "started_at": "2018-06-18 18:10:12"
+        }, 
+        {
+          "associated_object_id": 2, 
+          "created_at": "2018-06-27 21:59:09", 
+          "associated_object_type": "VirtualMachine", 
+          "updated_at": "2018-06-27 21:59:44", 
+          "log_output": null, 
+          "action": "take_backup", 
+          "started_at": "2018-06-27 21:59:09"
+        }
+      ], 
+      "pending": []
+    }, 
+    "zones": {
+      "3": {
+        "data_store_joins": [
+          "ISDS1"
+        ], 
+        "backup_server_joins": [
+          "BS1"
+        ], 
+        "network_joins": [
+          "NET1"
+        ], 
+        "label": "Default Compute Zone", 
+        "hypervisors": {
+          "1": {
+            "vm_data": {
+              "on": 1, 
+              "off": 1, 
+              "failed": 0
+            }, 
+            "kernel": "3.10.0-693.17.1.el7.x86_64", 
+            "ping": 1, 
+            "cpu": {
+              "cores": "4", 
+              "model": "Intel(R) Xeon(R) CPU D-1521 @ 2.40GHz", 
+              "speed": "2399"
+            }, 
+            "snmp": 1, 
+            "label": "HV01", 
+            "ip_address": "10.0.0.2", 
+            "connectivity": {
+              "all": {
+                "1": 1, 
+                "2": 1, 
+                "B1": 1
+              }, 
+              "storage_network": {
+                "1": 1, 
+                "2": 1, 
+                "B1": 1
+              }
+            }, 
+            "version": "5.5.0-45", 
+            "ssh": 1, 
+            "memory": "7983", 
+            "loadavg": "0.00 0.10 0.14 1/237 21837", 
+            "type": "kvm", 
+            "id": 1, 
+            "freemem": "1227", 
+            "distro": "CentOS Linux release 7.3.1611 (Core)"
+          }, 
+          "2": {
+            "vm_data": {
+              "on": 0, 
+              "off": 0, 
+              "failed": 0
+            }, 
+            "kernel": "3.10.0-693.17.1.el7.x86_64", 
+            "ping": 1, 
+            "cpu": {
+              "cores": "4", 
+              "model": "Intel(R) Xeon(R) CPU D-1521 @ 2.40GHz", 
+              "speed": "2399"
+            }, 
+            "snmp": 1, 
+            "label": "HV02", 
+            "ip_address": "10.0.0.4", 
+            "connectivity": {
+              "all": {
+                "1": 1, 
+                "2": 1, 
+                "B1": 1
+              }, 
+              "storage_network": {
+                "1": 1, 
+                "2": 1, 
+                "B1": 1
+              }
+            }, 
+            "version": "5.5.0-45", 
+            "ssh": 1, 
+            "memory": "7983", 
+            "loadavg": "0.13 0.20 0.20 1/213 2872", 
+            "type": "kvm", 
+            "id": 2, 
+            "freemem": "666", 
+            "distro": "CentOS Linux release 7.3.1611 (Core)"
+          }
+        }, 
+        "data_stores": {
+          "1": {
+            "io_limits": null, 
+            "is_cache_settings": null, 
+            "data_store_size": 500.0, 
+            "local_hypervisor_id": null, 
+            "db_disk_size_total": 6, 
+            "disk_count": 2, 
+            "label": "ISDS1", 
+            "hypervisor_group_id": 3, 
+            "data_store_type": "is", 
+            "zombie_disks": [
+              "18ko5g0apcr7jv"
+            ], 
+            "is_cache_enabled": 0, 
+            "identifier": "f17k4xqgpojcln", 
+            "id": 1, 
+            "average_node_usage": 0
+          }
+        }, 
+        "backup_servers": {
+          "1": {
+            "kernel": "3.10.0-693.17.1.el7.x86_64", 
+            "ping": 1, 
+            "snmp": 1, 
+            "label": "BS1", 
+            "connectivity": {
+              "all": {
+                "1": 1, 
+                "2": 1, 
+                "B1": 1
+              }, 
+              "storage_network": {
+                "1": 1, 
+                "2": 1, 
+                "B1": 1
+              }
+            }, 
+            "version": "5.5.0-45", 
+            "ssh": 1, 
+            "memory": "3951", 
+            "loadavg": "0.00 0.01 0.05 1/203 18440", 
+            "ip_address": "10.0.0.6", 
+            "cpu": {
+              "cores": "4", 
+              "model": "Intel(R) Xeon(R) CPU D-1521 @ 2.40GHz", 
+              "speed": "2399"
+            }, 
+            "freemem": "161", 
+            "distro": "CentOS Linux release 7.3.1611 (Core)"
+          }
+        }, 
+        "zone_id": 3
+      }
+    }, 
+    "vm_data": {
+      "on": 1, 
+      "off": 1, 
+      "failed": 0
+    }, 
+    "timezone": "America/Denver", 
+    "loadavg": "0.07 0.08 0.08 1/715 23173", 
+    "freemem": "5290", 
+    "version": "onapp-cp-5.6.0-83.noarch", 
+    "memory": "15885", 
+    "cpu": {
+      "cores": "6", 
+      "model": "Intel(R) Xeon(R) CPU D-1521 @ 2.40GHz", 
+      "speed": "2399.998"
+    }, 
+    "distro": "CentOS Linux release 7.5.1804 (Core)"
+  }
+}
