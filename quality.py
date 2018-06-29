@@ -92,8 +92,8 @@ class OnappException(Exception):
         self.data = d;
         self.func = f;
         self.reason = reason;
-        print('OnappError, Action: {}, Data: {}'.format(self.f, self.d))
-        if self.reason is not False: print('Reason: {}'.format(self.reason))
+        print('OnappError, Action: {}, Data: {}'.format(f, d))
+        if self.reason: print('Reason: {}'.format(self.reason))
 
 def logger(s):
     l = open(LOG_FILE, "a");
