@@ -239,7 +239,7 @@ def pullAPIEmail():
 
 try:
     API_AUTH = base64.encodestring("{}:{}".format(pullAPIEmail(), pullAPIKey())).replace('\n', '');
-except OnAppException:
+except OnappException:
     API_AUTH = None
 
 def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):

@@ -3,10 +3,15 @@
 ### What is this repository for? ###
 
 * An automated quality assurance/validation script for OnApp Enterprise Deployments
-* Ver 0.3.5
+* Ver 0.9.1 
 
 ### What does this script do?/Version history ###
 
+Python(only version available now)
+* Does everything the bash one does but better
+* Also can submit the results to architecture.onapp.com to track health over time
+
+BASH(no longer avilable):
 * Checks Control Server OnApp Versions, Kernel Version, CentOS Distribution, Time Zone, and Disk Size
 * Checks that the Recovery, Load Balancer, FreeBSD, etc Templates have been downloaded
 * Checks Compute Resources can be seen, SSH'd to, SNMP port open, OnApp Version, Kernel, and Distro.
