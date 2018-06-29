@@ -792,9 +792,10 @@ def mainFunction():
     if VERBOSE or not API_TOKEN: print json.dumps(health_data, indent=2)
     logger(health_data)
     logger(json.dumps(health_data, indent=2))
+    return health_data;
 
 if __name__ == "__main__":
-    mainFunction();
+    health_data = mainFunction();
     if API_TOKEN:
         response = apiCall('/api/healthcheck?token={}'.format(API_TOKEN), data=json.dumps(health_data), method='POST', target=API_TARGET)
         if 'success' not in response.keys():
