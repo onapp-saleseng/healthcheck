@@ -697,11 +697,11 @@ def mainFunction():
             tmp['cpu'] = cpuCheck(hv['ip_address'])
             tmp['vm_data'] = { \
                 'off' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                              WHERE booted=0 AND hypervisor_id={}'.format(hv['id'])) ,\
+                              WHERE booted=0 AND hypervisor_id={} AND deleted_at IS NOT NULL'.format(hv['id'])) ,\
                 'on' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                             WHERE booted=1 AND hypervisor_id={}'.format(hv['id'])) ,\
+                             WHERE booted=1 AND hypervisor_id={} AND deleted_at IS NOT NULL'.format(hv['id'])) ,\
                 'failed' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                                 WHERE state="failed" AND hypervisor_id={}'.format(hv['id'])) }
+                                 WHERE state="failed" AND hypervisor_id={} AND deleted_at IS NOT NULL'.format(hv['id'])) }
             if not quiet:
                 #print all the hypervisor data
                 fs = '{:>20s} : {}'
