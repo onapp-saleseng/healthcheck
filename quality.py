@@ -221,26 +221,26 @@ def dRunPrettyQuery(q, unlist=True):
 
 dpsql = dRunPrettyQuery;
 
-def pullAPIKey():
-    res = dsql("SELECT api_key FROM users WHERE id={}".format(USER_ID));
-    if res == None:
-        raise OnappException(res, 'pullAPIKey', 'API Key is not in database. \
-        Please generate API key for user id {}, or specify a different user id.'.format(USER_ID));
-    logger("Pulled API key from database.");
-    return res;
-
-def pullAPIEmail():
-    res = dsql("SELECT email FROM users WHERE id={}".format(USER_ID));
-    if res == None:
-        raise OnappException(res, 'pullAPIEmail', 'Admin email is not in database. \
-        Please fill in e-mail for user id {}, or specify a different user id.'.format(USER_ID));
-    logger("Pulled API Email from database.");
-    return res;
-
-try:
-    API_AUTH = base64.encodestring("{}:{}".format(pullAPIEmail(), pullAPIKey())).replace('\n', '');
-except OnappException:
-    API_AUTH = None
+# def pullAPIKey():
+#     res = dsql("SELECT api_key FROM users WHERE id={}".format(USER_ID));
+#     if res == None:
+#         raise OnappException(res, 'pullAPIKey', 'API Key is not in database. \
+#         Please generate API key for user id {}, or specify a different user id.'.format(USER_ID));
+#     logger("Pulled API key from database.");
+#     return res;
+#
+# def pullAPIEmail():
+#     res = dsql("SELECT email FROM users WHERE id={}".format(USER_ID));
+#     if res == None:
+#         raise OnappException(res, 'pullAPIEmail', 'Admin email is not in database. \
+#         Please fill in e-mail for user id {}, or specify a different user id.'.format(USER_ID));
+#     logger("Pulled API Email from database.");
+#     return res;
+#
+# try:
+#     API_AUTH = base64.encodestring("{}:{}".format(pullAPIEmail(), pullAPIKey())).replace('\n', '');
+# except OnappException:
+API_AUTH = None
 
 def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
     req = Request("{}{}".format(target, r), json.dumps(data))
