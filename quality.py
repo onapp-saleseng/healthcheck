@@ -1,5 +1,7 @@
+#!/usr/bin/python2.7
 import os
 import ast
+import ssl
 import sys
 import json
 import shlex
@@ -25,19 +27,22 @@ LOG_FILE="./test.log"
 
 arp = argparse.ArgumentParser(prog='qualitycheck', description='Quality check for OnApp')
 # arp.add_argument('-a', '--api', help='Enable API', action='store_true')
-arp.add_argument('-v', '--verbose', help='Output more info while running', action='store_true')
-arp.add_argument('-q', '--quiet', help='Don\'t output normal test output.', action='store_true')
+arp.add_argument('-v', '--verbose', help='Output more info while running', action='store_true', default=False)
+arp.add_argument('-q', '--quiet', help='Don\'t output normal test output.', action='store_true', default=True)
 arp.add_argument('-t', '--transactions', help='View N previous days of transactions, default: 7', type=int, metavar='N', default=7)
-arp.add_argument('-u', '--user', help='Perform API requests as user id N, default: 1', type=int, metavar='N', default=1)
-arp.add_argument('-c', '--commands', help='Display commands for fixes, such as zombie disks or templates', action='store_true')
-arp.add_argument('-a', '--api', help='Hostname for API calls, default architecture.onapp.com', type=str, metavar='H', default='architecture.onapp.com')
+#arp.add_argument('-u', '--user', help='Perform API requests as user id N, default: 1', type=int, metavar='N', default=1)
+arp.add_argument('-c', '--commands', help='Display commands for fixes, such as zombie disks or templates [BETA]', action='store_true')
+arp.add_argument('-a', '--api', help='Hostname for API submission, default architecture.onapp.com', type=str, metavar='H', default='https://architecture.onapp.com')
+arp.add_argument('-k', '--token', help='Token for sending data via API to architecture.onapp.com', type=str, metavar='K')
 args = arp.parse_args();
 VERBOSE=args.verbose;
-USER_ID=args.user;
+#USER_ID=args.user;
+USER_ID=1;
 DISPLAY_COMMANDS=args.commands;
 quiet=args.quiet;
 API_TARGET=args.api;
 TRANSACTION_DURATION=args.transactions;
+API_TOKEN=args.token;
 
 class colors:
     '''Colors class:
@@ -139,8 +144,7 @@ def dbConn(conf=None):
     return SQL.connect(host=conf['host'], user=conf['username'], passwd=conf['password'], db=conf['database'])
 
 def dRunQuery(q, unlist=True):
-    logger("Runnning query: {}".format(q))
-    if VERBOSE: print("Running query:{}".format(q))
+    if VERBOSE: logger("Running query:{}".format(' '.join(q.split())))
     db = dbConn();
     cur = db.cursor();
     cur.execute(q)
@@ -189,8 +193,7 @@ def dRunPrettyQueryLegacy(fields, table, conditions=None):
     return output;
 
 def dRunPrettyQuery(q, unlist=True):
-    logger("Running pretty query: {}".format(q))
-    if VERBOSE: print("Running pretty query: {}".format(q))
+    if VERBOSE: logger("Running pretty query:{}".format(' '.join(q.split())))
     db = dbConn();
     cur = db.cursor();
     cur.execute(q)
@@ -216,7 +219,6 @@ def dRunPrettyQuery(q, unlist=True):
     if len(output) == 0: return False;
     return output;
 
-
 dpsql = dRunPrettyQuery;
 
 def pullAPIKey():
@@ -240,15 +242,18 @@ try:
 except OnAppException:
     API_AUTH = None
 
-def apiCall(r, data=None, method=None, target=API_TARGET, auth=API_AUTH):
-    # if not API_ENABLED:
-    #     raise OnappException('', 'apiCall', 'API is not enabled.')
-    req = Request("http://{}{}".format(target, r), json.dumps(data))
+def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
+    req = Request("{}{}".format(target, r), json.dumps(data))
     req.add_header("Authorization", "Basic {}".format(auth))
     req.add_header("Accept", "application/json")
     req.add_header("Content-type", "application/json")
     if method: req.get_method = lambda: method;
-    response = urlopen(req)
+    if target.startswith('https://'):
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        ssl_content.load_default_certs();
+        response = urlopen(req, context=ssl_context)
+    else:
+        response = urlopen(req)
     status = response.getcode()
     caller = inspect.stack()[1][3];
     logger('API Call executed - {}{}, Status code: {}'.format(target, r, status));
@@ -324,6 +329,7 @@ AND enabled=1 ORDER BY id", unlist=False)
 for zid in dsql("SELECT DISTINCT p.id FROM packs AS p \
                  JOIN hypervisors AS hv ON hv.hypervisor_group_id=p.id \
                  WHERE p.type='HypervisorGroup' \
+                 GROUP BY p.id \
                  HAVING count(hv.id) > 0;", unlist=False):
     HOSTS['ZONES'][zid] = dpsql("SELECT label FROM packs WHERE id={}".format(zid), unlist=False)
     HOSTS['ZONES'][zid]['HV'] = {}
@@ -333,8 +339,8 @@ for zid in dsql("SELECT DISTINCT p.id FROM packs AS p \
              FROM hypervisors WHERE id={}".format(hvid) )
     bsids = dsql("SELECT id FROM backup_server_joins WHERE \
         target_join_type='HypervisorGroup' AND target_join_id={}".format(zid), unlist=False)
+    HOSTS['ZONES'][zid]['BS'] = {};
     if bsids:
-        HOSTS['ZONES'][zid]['BS'] = {};
         for bsid in bsids:
             HOSTS['ZONES'][zid]['BS'][bsid] = dpsql("SELECT id, label, ip_address, 'backup' as hypervisor_type \
                 FROM backup_servers WHERE id={}".format(bsid));
@@ -385,54 +391,47 @@ def runCmd(cmd, shell=False, shlexy=True):
     return stdout.strip();
 
 def checkHVBSStatus(target):
-    # ping, ssh, SNMP, version, kernel, distro
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    ## it seems like the first SNMP connection would register 0, then give a good value afterwards so gotta prime it:
-    primer = sock.connect_ex((target['ip_address'], 161))
-    del primer;
     rData = {};
-    ping_cmd = [ 'ping', target['ip_address'], '-w1' ]
-    ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
-    # snmp_cmd = [ 'nc', target, '161', '</dev/null' ]
+    vm_list = [];
     hv_ver_bash_cmd = "ssh -p{} root@{} \"cat /onapp/onapp-store-install.version 2>/dev/null || cat /onapp/onapp-hv-tools.version 2>/dev/null || grep Version /onappstore/package-version.txt 2>/dev/null || echo '???'\""
     hv_ver_cmd = [ 'su', 'onapp', '-c', hv_ver_bash_cmd.format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
     hv_kernel_cmd = [ 'su', 'onapp', '-c', 'ssh -p{} root@{} "uname -r 2>/dev/null" 2>/dev/null'.format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
     hv_distro_cmd = [ 'su', 'onapp', '-c', 'ssh -p{} root@{} "cat /etc/redhat-release 2>/dev/null" 2>/dev/null'.format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
-    #run all these, test them to make sure that they even work...
-    rData['ping'] = 0 if runCmd(ping_cmd) == '' else 1;
-    rData['ssh'] = 0 if runCmd(ssh_cmd) == '' else 1;
-    rData['snmp'] = 0 if sock.connect_ex((target['ip_address'], 161)) == 0 else 1;
     rData['version'] = runCmd(hv_ver_cmd);
     rData['kernel'] = runCmd(hv_kernel_cmd);
     rData['distro'] = runCmd(hv_distro_cmd);
     rData['loadavg'] = runCmd(['su','onapp','-c','ssh -p{} root@{} "cat /proc/loadavg"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
     rData['memory'] = runCmd(['su','onapp','-c','ssh -p{} root@{} "free -m"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])]).split('\n')[1].split()[1]
     rData['freemem'] = runCmd(['su','onapp','-c','ssh -p{} root@{} "free -m"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])]).split('\n')[1].split()[2]
-    hv_vms = dpsql("SELECT identifier, booted FROM virtual_machines WHERE hypervisor_id = {}".format(ONAPP_CONFIG['ssh_port'], target['id']), False)
+    hv_vms = dsql("SELECT identifier FROM virtual_machines WHERE hypervisor_id = {} AND booted=1 AND identifier IS NOT NULL".format(target['id']), False)
     if hv_vms is False:
-        hv_booted_vms = [];
-    else:
-        hv_booted_vms = [ i['identifier'] for i in hv_vms if i['booted'] == 1 ]
+        hv_vms = [];
     if target['hypervisor_type'] == 'kvm':
         vm_from_hv = runCmd(['su','onapp','-c','ssh -p{} root@{} "virsh list --state-running"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
         vm_list = vm_from_hv.split('\n')
         del vm_list[0]
         del vm_list[0]
         vm_list = [ t.split()[1] for t in vm_list if "STORAGENODE" not in t.split()[1] ]
-        cloned_hvvms = copy(hv_booted_vms)
-        zombie_vms = [];
-        for vm in vm_list:
-            try:
-                cloned_hvvms.remove(vm)
-            except ValueError:
-                print('!!! Virtual Machine {} is booted on the hypervisor but not booted in database !!!'.format(vm))
-                logger('! Virtual Machine {} is bootedon the hypervisor but not booted in database'.format(vm))
-                zombie_vms.append(vm)
-        if len(cloned_hvvms) > 0:
-            print '!!! Virtual machines found running in database, but not on the hypervisor: ', ','.join(cloned_hvvms)
-            logger('! Virtual machines found running in database, but not on the hypervisor: ', ','.join(cloned_hvvms))
-        if len(zombie_vms): rData['zombie_vms'] = zombie_vms;
-        if len(cloned_hvvms): rData['dead_vms'] = cloned_hvvms;
+    if target['hypervisor_type'] == 'xen':
+        vm_from_hv = runCmd(['su','onapp','-c','ssh -p{} root@{} "xm list --state=running"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
+        vm_list = vm_from_hv.split('\n')
+        del vm_list[0]
+        vm_list = [ x for x in vm_list if 'Domain-0' not in x ]
+        vm_list = [ t.split()[0] for t in vm_list if "STORAGENODE" not in t.split()[1] ]
+    cloned_hvvms = copy(hv_vms)
+    zombie_vms = [];
+    for vm in vm_list:
+        try:
+            cloned_hvvms.remove(vm)
+        except ValueError:
+            print('!!! Virtual Machine {} is booted on the hypervisor but not booted in database !!!'.format(vm))
+            logger('! Virtual Machine {} is bootedon the hypervisor but not booted in database'.format(vm))
+            zombie_vms.append(vm)
+    if len(cloned_hvvms) > 0:
+        print '!!! Virtual machines found running in database, but not on the hypervisor: ', ','.join(cloned_hvvms)
+        logger('! Virtual machines found running in database, but not on the hypervisor: {}'.format(','.join(cloned_hvvms)))
+    if len(zombie_vms): rData['zombie_vms'] = zombie_vms;
+    if len(cloned_hvvms): rData['dead_vms'] = cloned_hvvms;
     #### Create also for xen hypervisors...
     return rData;
 
@@ -671,9 +670,14 @@ def mainFunction():
         if health_data['cp_data']['vm_data']['failed'] is not False:
             print fs.format('Total VMs FAIL', health_data['cp_data']['vm_data']['failed'])
         print '{:-^45}'.format('')
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     for zone in health_data['cp_data']['zones'].keys():
         health_data['cp_data']['zones'][zone]['hypervisors'] = {}
         for hv in HOSTS['ZONES'][zone]['HV'].itervalues():
+            ## it seems like the first SNMP connection would register 0, then give a good value afterwards
+            ## so... gonna prime it just in case:
+            primer = sock.connect_ex((hv['ip_address'], 161))
+            del primer;
             tmp = checkHVBSStatus(hv)
             tmp['id'] = hv['id']
             tmp['type'] = hv['hypervisor_type']
@@ -688,6 +692,11 @@ def mainFunction():
                 'failed' : dsql('SELECT count(*) AS count FROM virtual_machines \
                                  WHERE state="failed" AND hypervisor_id={}'.format(hv['id'])) }
             tmp['connectivity'] = {'storage_network':{}, 'all':{}}
+            ping_cmd = [ 'ping', hv['ip_address'], '-w1' ]
+            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
+            tmp['connectivity']['ping'] = 0 if runCmd(ping_cmd) == '' else 1;
+            tmp['connectivity']['ssh'] = 0 if runCmd(ssh_cmd) == '' else 1;
+            tmp['connectivity']['snmp'] = 0 if sock.connect_ex((hv['ip_address'], 161)) == 0 else 1;
             if not quiet:
                 #print all the hypervisor data
                 fs = '{:>20s} : {}'
@@ -779,9 +788,16 @@ def mainFunction():
     health_data['cp_data']['transactions'] = {}
     health_data['cp_data']['transactions']['pending'] = pending_trans;
     health_data['cp_data']['transactions']['failed'] = failed_trans;
-    print health_data;
-    print json.dumps(health_data, indent=2)
+    #print health_data;
+    if VERBOSE or not API_TOKEN: print json.dumps(health_data, indent=2)
     logger(health_data)
+    logger(json.dumps(health_data, indent=2))
 
 if __name__ == "__main__":
     mainFunction();
+    if API_TOKEN:
+        response = apiCall('/api/healthcheck?token={}'.format(API_TOKEN), data=json.dumps(health_data), method='POST', target=API_TARGET)
+        if 'success' not in response.keys():
+            raise OnappException(response, 'apiCall', 'Success key was not found in response.')
+        else:
+            print 'View the healthcheck at: {}/healthcheck/{}'.format(API_TARGET, response['success']);
