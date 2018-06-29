@@ -250,7 +250,7 @@ def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
     if method: req.get_method = lambda: method;
     if target.startswith('https://'):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-        ssl_content.load_default_certs();
+        ssl_context.load_default_certs();
         response = urlopen(req, context=ssl_context)
     else:
         response = urlopen(req)
