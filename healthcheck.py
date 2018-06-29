@@ -25,7 +25,7 @@ DB_CONF_FILE="{}/database.yml".format(ONAPP_CONF_DIR);
 LOG_FILE="./test.log"
 
 
-arp = argparse.ArgumentParser(prog='qualitycheck', description='Quality check for OnApp')
+arp = argparse.ArgumentParser(prog='healthcheck', description='Health check for OnApp')
 # arp.add_argument('-a', '--api', help='Enable API', action='store_true')
 arp.add_argument('-v', '--verbose', help='Output more info while running', action='store_true', default=False)
 arp.add_argument('-q', '--quiet', help='Don\'t output normal test output.', action='store_true', default=True)
@@ -678,7 +678,18 @@ def mainFunction():
             ## so... gonna prime it just in case:
             primer = sock.connect_ex((hv['ip_address'], 161))
             del primer;
-            tmp = checkHVBSStatus(hv)
+            tmp = {};
+            tmp['connectivity'] = {'storage_network':{}, 'all':{}}
+            ping_cmd = [ 'ping', hv['ip_address'], '-w1' ]
+            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
+            tmp['connectivity']['ping'] = 0 if runCmd(ping_cmd) == '' else 1;
+            tmp['connectivity']['ssh'] = 0 if runCmd(ssh_cmd) == '' else 1;
+            tmp['connectivity']['snmp'] = 0 if sock.connect_ex((hv['ip_address'], 161)) == 0 else 1;
+            if tmp['connectivity']['ssh'] == 0:
+                health_data['cp_data']['zones'][zone]['hypervisors'][hv['id']] = tmp
+                continue;
+            tmp_status = checkHVBSStatus(hv)
+            tmp.update(tmp_status)
             tmp['id'] = hv['id']
             tmp['type'] = hv['hypervisor_type']
             tmp['ip_address'] = hv['ip_address']
@@ -691,12 +702,6 @@ def mainFunction():
                              WHERE booted=1 AND hypervisor_id={}'.format(hv['id'])) ,\
                 'failed' : dsql('SELECT count(*) AS count FROM virtual_machines \
                                  WHERE state="failed" AND hypervisor_id={}'.format(hv['id'])) }
-            tmp['connectivity'] = {'storage_network':{}, 'all':{}}
-            ping_cmd = [ 'ping', hv['ip_address'], '-w1' ]
-            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
-            tmp['connectivity']['ping'] = 0 if runCmd(ping_cmd) == '' else 1;
-            tmp['connectivity']['ssh'] = 0 if runCmd(ssh_cmd) == '' else 1;
-            tmp['connectivity']['snmp'] = 0 if sock.connect_ex((hv['ip_address'], 161)) == 0 else 1;
             if not quiet:
                 #print all the hypervisor data
                 fs = '{:>20s} : {}'
@@ -775,7 +780,7 @@ def mainFunction():
 
     tran_query = "SELECT \
         action, associated_object_type, associated_object_id, \
-        created_at, started_at, updated_at, log_output \
+        created_at, started_at, updated_at \
       FROM transactions WHERE status='{}' AND \
       created_at >= (CURDATE() - INTERVAL {} DAY) \
       ORDER BY created_at"
