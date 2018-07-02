@@ -471,7 +471,7 @@ def checkComputeZones(zone_id=False):
     zone_data = {};
     zone_ids = HOSTS['ZONES'].keys();
     if zone_id is False and type(zone_ids) is not long:
-        all_zone_ids = dsql("SELECT id FROM packs WHERE type='HypervisorGroup'")
+        all_zone_ids = dsql("SELECT id FROM packs WHERE type='HypervisorGroup'", unlist=False)
         for zid in all_zone_ids:
             vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zid))
             if vc_check is False: continue
@@ -486,7 +486,7 @@ def checkComputeZones(zone_id=False):
     else:
         if type(zone_ids) is long: zone_id = zone_ids;
         vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zone_id))
-        if len(vc_check) == 0: raise OnappException('Requested hypervisor zone either does not exist or is all vcenter/vcloud')
+        if len(vc_check) == 0: logger('Requested hypervisor zone either does not exist or is all vcenter/vcloud')
         zone_data[zid] = {'zone_id':zone_id, 'label':HOSTS['ZONES'][zid]['label'], 'network_joins':checkNetJoins(zone_id), \
             'data_store_joins':checkDataJoins(zone_id), 'backup_server_joins':checkBackupJoins(zone_id)}
     return zone_data;
@@ -541,12 +541,14 @@ def checkDataStore(target_id):
         lv_size_sum = sum(lv_sizes)
         if VERBOSE: print "Total size: {}g".format(lv_size_sum)
         logger("Total size: {}g".format(lv_size_sum))
+        ds_data['missing_disks'] = [];
         for disk in db_disk_ids:
             try:
                 lv_disks.remove(disk)
             except ValueError:
                 print('!!! Disk {} found in database is NOT in LVM data store {} !!!'.format(disk, ds_data['identifier']))
                 logger('! Missing disk {} is in database but not in LVM data store {}'.format(disk, ds_data['identifier']))
+                ds_data['missing_disks'].append(disk)
         if len(lv_disks) > 0:
             print ' !!! Zombie disks found:', ','.join(lv_disks)
             logger('! Zombie disks found: '+','.join(lv_disks))
@@ -566,6 +568,7 @@ def checkDataStore(target_id):
             tmp = stapi(target_ip, '/is/Node/{}'.format(node))[node]['utilization']
             node_sizes = { node : tmp }
         ds_data['average_node_usage'] = (sum(node_sizes.values())/len(node_sizes))
+        ds_data['missing_disks'] = [];
         for disk in db_disk_ids:
             try:
                 is_disks.remove(disk)
@@ -573,6 +576,7 @@ def checkDataStore(target_id):
                 print('{}!!! Disk {} found in database is NOT in IS data store {} !!!{}'.format( \
                     colors.fg.red, disk, ds_data['identifier'], colors.none))
                 logger('! Missing disk {} is in database but not in IS data store {}'.format(disk, ds_data['identifier']))
+                ds_data['missing_disks'].append(disk)
         if len(is_disks) > 0:
             print ' !!! Zombie disks found:', ','.join(is_disks)
             logger('! Zombie disks found: '+','.join(is_disks))
@@ -613,28 +617,28 @@ def checkBackups(target):
                 print 'rm -rf {}/{}/{}/{}'.format(ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup)
     data['zombie'] = backups_on_server;
     # maybe have it come check disk space vs the database sizes to find "empty" backups?
-    backup_sizes_in_db = { t[0] : t[1] for t in dsql("SELECT identifier, backup_size FROM backups WHERE backup_server_id={}".format(target)) }
-    inc_backups_by_vm = {}
-    inc_backups_in_db = dsql('SELECT identifier, target_id FROM backups WHERE \
-            type="BackupIncremental" AND target_type="VirtualMachine" AND backup_server_id={} \
-            ORDER BY created_at'.format(target))
-    for vm in inc_backups_in_db:
-        if vm[1] not in inc_backups_by_vm.keys():
-            inc_backups_by_vm[vm[1]] = [vm[0]]
-        else:
-            inc_backups_by_vm[vm[1]].append(vm[0])
-    for vm in inc_backups_by_vm.keys():
-        tmp = [ '{}/{}/{}/{}'.format(ONAPP_CONFIG['backups_path'], b[0], b[1], b) for b in inc_backups_by_vm[vm]]
-        server_blist = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "du -sk {}"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], ' '.join(tmp))]).split('\n')
-        backup_sizes_on_server = { t.split('\t')[1].split('/')[-1] : int(t.split('\t')[0]) for t in server_blist }
-    norm_backups_in_db = dsql('SELECT identifier, target_id FROM backups WHERE \
-            backup_server_id={} AND type="BackupNormal"'.format(target))
-    tmp = [ '{}/{}/{}/{}'.format(ONAPP_CONFIG['backups_path'], b[0], b[1], b) for b in norm_backups_in_db ]
-    for path in tmp:
-        server_du = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "du -sk {}"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], path)]).split('\t')
-        backup_sizes_on_server[server_du[1]] = server_du[0]
-    #for backups in backup_sizes_in_db.keys():
-        #go through each one, compare it to the values I got previously, report differences.
+    # backup_sizes_in_db = { t[0] : t[1] for t in dsql("SELECT identifier, backup_size FROM backups WHERE backup_server_id={}".format(target)) }
+    # inc_backups_by_vm = {}
+    # inc_backups_in_db = dsql('SELECT identifier, target_id FROM backups WHERE \
+    #         type="BackupIncremental" AND target_type="VirtualMachine" AND backup_server_id={} \
+    #         ORDER BY created_at'.format(target))
+    # for vm in inc_backups_in_db:
+    #     if vm[1] not in inc_backups_by_vm.keys():
+    #         inc_backups_by_vm[vm[1]] = [vm[0]]
+    #     else:
+    #         inc_backups_by_vm[vm[1]].append(vm[0])
+    # for vm in inc_backups_by_vm.keys():
+    #     tmp = [ '{}/{}/{}/{}'.format(ONAPP_CONFIG['backups_path'], b[0], b[1], b) for b in inc_backups_by_vm[vm]]
+    #     server_blist = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "du -sk {}"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], ' '.join(tmp))]).split('\n')
+    #     backup_sizes_on_server = { t.split('\t')[1].split('/')[-1] : int(t.split('\t')[0]) for t in server_blist }
+    # norm_backups_in_db = dsql('SELECT identifier, target_id FROM backups WHERE \
+    #         backup_server_id={} AND type="BackupNormal"'.format(target))
+    # tmp = [ '{}/{}/{}/{}'.format(ONAPP_CONFIG['backups_path'], b[0], b[1], b) for b in norm_backups_in_db ]
+    # for path in tmp:
+    #     server_du = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "du -sk {}"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], path)]).split('\t')
+    #     backup_sizes_on_server[server_du[1]] = server_du[0]
+    # #for backups in backup_sizes_in_db.keys():
+    #     #go through each one, compare it to the values I got previously, report differences.
     return data
 
 def mainFunction():
@@ -777,7 +781,6 @@ def mainFunction():
                                WHERE dsj.target_join_id=3 AND ds.enabled=1', unlist=False)
         health_data['cp_data']['zones'][zone]['data_stores'] = { dsid : checkDataStore(dsid) for dsid in data_store_ids }
     if not quiet: print
-
     tran_query = "SELECT \
         action, associated_object_type, associated_object_id, \
         created_at, started_at, updated_at \
