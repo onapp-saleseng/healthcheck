@@ -779,7 +779,8 @@ def mainFunction():
         data_store_ids = dsql('SELECT dsj.data_store_id FROM data_store_joins dsj \
                                JOIN data_stores ds ON ds.id = dsj.data_store_id \
                                WHERE dsj.target_join_id=3 AND ds.enabled=1', unlist=False)
-        health_data['cp_data']['zones'][zone]['data_stores'] = { dsid : checkDataStore(dsid) for dsid in data_store_ids }
+        if data_store_ids: health_data['cp_data']['zones'][zone]['data_stores'] = { dsid : checkDataStore(dsid) for dsid in data_store_ids }
+    else: health_data['cp_data']['zones'][zone]['data_stores'] = {};
     if not quiet: print
     tran_query = "SELECT \
         action, associated_object_type, associated_object_id, \
