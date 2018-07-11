@@ -593,12 +593,17 @@ def checkDataStore(target_id):
     return ds_data;
 
 def checkBackups(target):
+    if type(target) is dict and 'id' in target.keys():
+        target = target['id']
+    else:
+        raise ValueError('Backup Server ID not found when calling checkBackups')
+    if VERBOSE: print "Checking backups on server id {}".format(target)
     data = {'missing':[], 'zombie':[]};
     # go through one backup server and check the backups with those in the database.
     bs_data = dpsql("SELECT id, ip_address, capacity FROM backup_servers WHERE id={}".format(target))
     backups_in_db = dsql("SELECT identifier FROM backups WHERE backup_server_id={}".format(target))
     backups_on_server_fullpath = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "ls -d -1 {}/[a-z]/[a-z]/*"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], ONAPP_CONFIG['backups_path'])]).split('\n')
-    backups_on_server = [line.lstrip(ONAPP_CONFIG['backups_path']).lstrip('/').split('/')[2] for line in backups_on_server_fullpath]
+    backups_on_server = [line.replace(ONAPP_CONFIG['backups_path'], '').lstrip('/').split('/')[2] for line in backups_on_server_fullpath]
     for backup in backups_in_db:
         try:
             backups_on_server.remove(backup);
@@ -616,6 +621,7 @@ def checkBackups(target):
             for backups in backups_on_server:
                 print 'rm -rf {}/{}/{}/{}'.format(ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup)
     data['zombie'] = backups_on_server;
+    return data;
     # maybe have it come check disk space vs the database sizes to find "empty" backups?
     # backup_sizes_in_db = { t[0] : t[1] for t in dsql("SELECT identifier, backup_size FROM backups WHERE backup_server_id={}".format(target)) }
     # inc_backups_by_vm = {}
@@ -639,7 +645,6 @@ def checkBackups(target):
     #     backup_sizes_on_server[server_du[1]] = server_du[0]
     # #for backups in backup_sizes_in_db.keys():
     #     #go through each one, compare it to the values I got previously, report differences.
-    return data
 
 def mainFunction():
     health_data = {}
@@ -651,6 +656,8 @@ def mainFunction():
         'freemem' : runCmd("free -m").split('\n')[1].split()[2] , \
         'loadavg' : runCmd("cat /proc/loadavg"), \
         'timezone' : runCmd("readlink /etc/localtime").lstrip('../usr/share/zoneinfo/') , \
+        'ip_address' : runCmd("ip route get 1 | awk '{print $NF;exit}'", shell=True, shlexy=False) , \
+        # add ip address here
         'cpu' : cpuCheck()}
     health_data['cp_data']['vm_data'] = { \
         'off' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=0') ,\
@@ -762,6 +769,7 @@ def mainFunction():
         health_data['cp_data']['zones'][zone]['backup_servers'] = {};
         for bsid in HOSTS['ZONES'][zone]['BS'].itervalues():
             tmp = checkHVBSStatus(bsid)
+            tmp['backups_data'] = checkBackups(bsid)
             tmp['ip_address'] = bsid['ip_address']
             tmp['label'] = bsid['label']
             tmp['cpu'] = cpuCheck(bsid['ip_address'])
