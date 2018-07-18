@@ -601,7 +601,7 @@ def checkBackups(target):
     data = {'missing':[], 'zombie':[]};
     # go through one backup server and check the backups with those in the database.
     bs_data = dpsql("SELECT id, ip_address, capacity FROM backup_servers WHERE id={}".format(target))
-    backups_in_db = dsql("SELECT identifier FROM backups WHERE backup_server_id={}".format(target))
+    backups_in_db = dsql("SELECT identifier FROM backups WHERE backup_server_id={}".format(target), unlist=False)
     backups_on_server_fullpath = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "ls -d -1 {}/[a-z]/[a-z]/*"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], ONAPP_CONFIG['backups_path'])]).split('\n')
     backups_on_server = [line.replace(ONAPP_CONFIG['backups_path'], '').lstrip('/').split('/')[2] for line in backups_on_server_fullpath]
     for backup in backups_in_db:
@@ -692,7 +692,7 @@ def mainFunction():
             tmp = {};
             tmp['connectivity'] = {'storage_network':{}, 'all':{}}
             ping_cmd = [ 'ping', hv['ip_address'], '-w1' ]
-            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
+            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -o CommandTimeout=10 -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
             tmp['connectivity']['ping'] = 0 if runCmd(ping_cmd) == '' else 1;
             tmp['connectivity']['ssh'] = 0 if runCmd(ssh_cmd) == '' else 1;
             tmp['connectivity']['snmp'] = 0 if sock.connect_ex((hv['ip_address'], 161)) == 0 else 1;
