@@ -12,11 +12,21 @@ import inspect
 import argparse
 import datetime
 import subprocess
-import MySQLdb as SQL
 # from subprocess import call, Popen
 from copy import copy
 from urllib2 import Request, urlopen, URLError, build_opener, HTTPHandler, HTTPError
 
+try:
+    import MySQLdb as SQL
+except ImportError:
+    print "MySQL not detected, attempting to install automatically..."
+    runCmd(['yum','-q','-y','install','MySQL-python'])
+    try:
+        import MySQLdb as SQL
+        print "Imported MySQL properly."
+    except:
+        print "Couldn't install/import MySQL. Please run `yum -y install MySQL-python`."
+        raise
 
 ONAPP_ROOT = '/onapp'
 ONAPP_CONF_DIR="{}/interface/config".format(ONAPP_ROOT);
@@ -248,36 +258,25 @@ def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
     req.add_header("Accept", "application/json")
     req.add_header("Content-type", "application/json")
     if method: req.get_method = lambda: method;
-    if target.startswith('https://'):
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-        ssl_context.load_default_certs();
-        response = urlopen(req, context=ssl_context)
-    else:
-        response = urlopen(req)
-    status = response.getcode()
     caller = inspect.stack()[1][3];
+    try:
+        if target.startswith('https://'):
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+            ssl_context.load_default_certs();
+            response = urlopen(req, context=ssl_context)
+        else:
+            response = urlopen(req)
+    except HTTPError:
+        print caller,"called erroneous API request: {}{}".format(target, r)
+    status = response.getcode()
     logger('API Call executed - {}{}, Status code: {}'.format(target, r, status));
     if VERBOSE: print('API Call executed - {}{}, Status code: {}'.format(target, r, status))
-    if status == 200:
+    if   status == 200:
         return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
     elif status == 204:
-        return True;
+        return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
     elif status == 201:
-        return True;
-    elif status == 400:
-        raise OnappException("400: Bad request", caller);
-    elif status == 403:
-        raise OnappException("403: Unauthorized API Call", caller)
-    elif status == 404:
-        raise OnappException("404: Requested URL {} Not Found".format(r), caller)
-    elif status == 422:
-        raise OnappException("422: Erroneous parameters in data", caller, str(data))
-    elif status == 500:
-        raise OnappException("500: Internal server error. Investigate logs on control server.", caller)
-    elif status == 503:
-        raise OnappException("503: System loaded, request will process when it can.", caller)
-    else:
-        raise OnappException("{}: Unknown HTTP Status code", caller)
+        return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
 
 def storageAPICall(target, r, data=None, method=None):
     req = Request("http://{}:8080{}".format(target, r), data)
