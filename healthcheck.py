@@ -40,14 +40,12 @@ arp = argparse.ArgumentParser(prog='healthcheck', description='Health check for 
 arp.add_argument('-v', '--verbose', help='Output more info while running', action='store_true', default=False)
 arp.add_argument('-q', '--quiet', help='Don\'t output normal test output.', action='store_true', default=True)
 arp.add_argument('-t', '--transactions', help='View N previous days of transactions, default: 7', type=int, metavar='N', default=7)
-#arp.add_argument('-u', '--user', help='Perform API requests as user id N, default: 1', type=int, metavar='N', default=1)
 arp.add_argument('-c', '--commands', help='Display commands for fixes, such as zombie disks or templates [BETA]', action='store_true')
 arp.add_argument('-a', '--api', help='Hostname for API submission, default architecture.onapp.com', type=str, metavar='H', default='https://architecture.onapp.com')
 arp.add_argument('-k', '--token', help='Token for sending data via API to architecture.onapp.com', type=str, metavar='K')
 args = arp.parse_args();
 VERBOSE=args.verbose;
-#USER_ID=args.user;
-USER_ID=1;
+#USER_ID=1;  # not even using local API any longer.
 DISPLAY_COMMANDS=args.commands;
 quiet=args.quiet;
 API_TARGET=args.api;
@@ -268,6 +266,7 @@ def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
             response = urlopen(req)
     except HTTPError:
         print caller,"called erroneous API request: {}{}".format(target, r)
+        return False;
     status = response.getcode()
     logger('API Call executed - {}{}, Status code: {}'.format(target, r, status));
     if VERBOSE: print('API Call executed - {}{}, Status code: {}'.format(target, r, status))
@@ -661,9 +660,9 @@ def mainFunction():
         # add ip address here
         'cpu' : cpuCheck()}
     health_data['cp_data']['vm_data'] = { \
-        'off' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=0') ,\
-        'on' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=1') ,\
-        'failed' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE state="failed"') }
+        'off' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=0 AND deleted_at IS NULL') ,\
+        'on' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=1 AND deleted_at IS NULL') ,\
+        'failed' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE state="failed" AND deleted_at IS NULL') }
     health_data['cp_data']['zones'] = checkComputeZones();
     if not quiet:
         fs = '{:>20s} : {}'
@@ -785,12 +784,32 @@ def mainFunction():
                 for t in HOSTS['ZONES'][zone]['BS'].itervalues():
                     tmp['connectivity']['storage_network']['B{}'.format(t['id'])] = checkHVConn(bsid['ip_address'], '10.200.{}.254'.format(t['host_id']))
             health_data['cp_data']['zones'][zone]['backup_servers'][bsid['id']] = tmp
+            if not quiet:
+                print fs.format('Label', tmp['label'])
+                print fs.format('IP Address', tmp['ip_address'])
+                print fs.format('Seen via', 'Ping:{}, SSH:{}, SNMP:{}'.format( \
+                    PASS if tmp['ping'] else FAIL, \
+                    PASS if tmp['ssh'] else FAIL, \
+                    PASS if tmp['snmp'] else FAIL))
+                print fs.format('CPU Model', tmp['cpu']['model'])
+                print fs.format('Cores', '{} @ {} MHz'.format(tmp['cpu']['cores'], tmp['cpu']['speed']))
+                print fs.format('Kernel', tmp['kernel'])
+                print fs.format('Distro', tmp['distro'])
+                print fs.format('OnApp Version', tmp['version'])
+                print fs.format('Memory', '{} free / {} MB'.format(tmp['freemem'], tmp['memory']))
+                print fs.format('Loadavg', tmp['loadavg'])
+                if len(tmp['backups_data']['zombie']) > 0:
+                    print "Zombie Backups found: {}".format(tmp['backups_data']['zombie'])
+                if len(tmp['backups_data']['missing']) > 0:
+                    print "Missing backups found: {}".format(tmp['backups_data']['missing'])
+                print '{:-^45}'.format('')
         data_store_ids = dsql('SELECT dsj.data_store_id FROM data_store_joins dsj \
                                JOIN data_stores ds ON ds.id = dsj.data_store_id \
                                WHERE dsj.target_join_id=3 AND ds.enabled=1', unlist=False)
         if data_store_ids: health_data['cp_data']['zones'][zone]['data_stores'] = { dsid : checkDataStore(dsid) for dsid in data_store_ids }
-    else: health_data['cp_data']['zones'][zone]['data_stores'] = {};
-    if not quiet: print
+        else: health_data['cp_data']['zones'][zone]['data_stores'] = {};
+        if not quiet and data_store_ids:
+            print "Datastores found: {}".format(data_store_ids)
     tran_query = "SELECT \
         action, associated_object_type, associated_object_id, \
         created_at, started_at, updated_at \
