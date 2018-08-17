@@ -692,7 +692,7 @@ def mainFunction():
             tmp = {};
             tmp['connectivity'] = {'storage_network':{}, 'all':{}}
             ping_cmd = [ 'ping', hv['ip_address'], '-w1' ]
-            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -o CommandTimeout=10 -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
+            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -o ConnectTimeout=10 -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
             tmp['connectivity']['ping'] = 0 if runCmd(ping_cmd) == '' else 1;
             tmp['connectivity']['ssh'] = 0 if runCmd(ssh_cmd) == '' else 1;
             tmp['connectivity']['snmp'] = 0 if sock.connect_ex((hv['ip_address'], 161)) == 0 else 1;
@@ -806,7 +806,10 @@ def mainFunction():
         data_store_ids = dsql('SELECT dsj.data_store_id FROM data_store_joins dsj \
                                JOIN data_stores ds ON ds.id = dsj.data_store_id \
                                WHERE dsj.target_join_id=3 AND ds.enabled=1', unlist=False)
-        if data_store_ids: health_data['cp_data']['zones'][zone]['data_stores'] = { dsid : checkDataStore(dsid) for dsid in data_store_ids }
+        if data_store_ids:
+            health_data['cp_data']['zones'][zone]['data_stores'] = {}
+            for dsid in data_store_ids:
+                health_data['cp_data']['zones'][zone]['data_stores'][dsid] = checkDataStore(dsid)
         else: health_data['cp_data']['zones'][zone]['data_stores'] = {};
         if not quiet and data_store_ids:
             print "Datastores found: {}".format(data_store_ids)
