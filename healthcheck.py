@@ -16,6 +16,20 @@ import subprocess
 from copy import copy
 from urllib2 import Request, urlopen, URLError, build_opener, HTTPHandler, HTTPError
 
+def logger(s):
+    l = open(LOG_FILE, "a");
+    text = '[{}] - {}\n'.format(str(datetime.datetime.now()),s)
+    l.write(text)
+    l.flush();
+    l.close();
+
+def runCmd(cmd, shell=False, shlexy=True):
+    if shlexy and type(cmd) is str:
+        cmd = shlex.split(cmd)
+    stdout, stderr = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate();
+    if stderr: logger("Command {} failed, stderr: {}".format(cmd, stderr.strip()))
+    return stdout.strip();
+
 try:
     import MySQLdb as SQL
 except ImportError:
@@ -102,13 +116,6 @@ class OnappException(Exception):
         self.reason = reason;
         print('OnappError, Action: {}, Data: {}'.format(f, d))
         if self.reason: print('Reason: {}'.format(self.reason))
-
-def logger(s):
-    l = open(LOG_FILE, "a");
-    text = '[{}] - {}\n'.format(str(datetime.datetime.now()),s)
-    l.write(text)
-    l.flush();
-    l.close();
 
 PASS="{}[+]{}".format(colors.fg.green, colors.reset)
 FAIL="{}[-]{}".format(colors.fg.red, colors.reset)
@@ -381,12 +388,7 @@ for zid in dsql("SELECT DISTINCT p.id FROM packs AS p \
 #   ORDER BY row_order, id) AS T")
 
 
-def runCmd(cmd, shell=False, shlexy=True):
-    if shlexy and type(cmd) is str:
-        cmd = shlex.split(cmd)
-    stdout, stderr = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate();
-    if stderr: logger("Command {} failed, stderr: {}".format(cmd, stderr.strip()))
-    return stdout.strip();
+
 
 def checkHVBSStatus(target):
     rData = {};
@@ -609,9 +611,9 @@ def checkBackups(target):
             backups_on_server.remove(backup);
         except ValueError:
             print('{}!!! Backup found in database but not on disk at {}/{}/{}/{} on backup server {}{}'.format( \
-                colors.fg.red, ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup, colors.none))
+                colors.fg.red, ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup, bs_data['ip_address'], colors.none))
             logger('!!! Backup found in database but not on disk at {}/{}/{}/{} on backup server {}'.format( \
-                ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup))
+                ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup, bs_data['ip_address']))
             data['missing'].append(backup)
     if len(backups_on_server) > 0:
         print(colors.fg.yellow, '!!! Zombie backups found: ', ','.join(backups_on_server), colors.fg.none)
