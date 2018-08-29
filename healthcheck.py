@@ -271,8 +271,8 @@ def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
             response = urlopen(req, context=ssl_context)
         else:
             response = urlopen(req)
-    except HTTPError:
-        print caller,"called erroneous API request: {}{}".format(target, r)
+    except HTTPError as err:
+        print caller,"called erroneous API request: {}{}, error: {}".format(target, r, str(err))
         return False;
     status = response.getcode()
     logger('API Call executed - {}{}, Status code: {}'.format(target, r, status));
@@ -542,13 +542,14 @@ def checkDataStore(target_id):
         if VERBOSE: print "Total size: {}g".format(lv_size_sum)
         logger("Total size: {}g".format(lv_size_sum))
         ds_data['missing_disks'] = [];
-        for disk in db_disk_ids:
-            try:
-                lv_disks.remove(disk)
-            except ValueError:
-                print('!!! Disk {} found in database is NOT in LVM data store {} !!!'.format(disk, ds_data['identifier']))
-                logger('! Missing disk {} is in database but not in LVM data store {}'.format(disk, ds_data['identifier']))
-                ds_data['missing_disks'].append(disk)
+        if not not db_disk_ids:
+            for disk in db_disk_ids:
+                try:
+                    lv_disks.remove(disk)
+                except ValueError:
+                    print('!!! Disk {} found in database is NOT in LVM data store {} !!!'.format(disk, ds_data['identifier']))
+                    logger('! Missing disk {} is in database but not in LVM data store {}'.format(disk, ds_data['identifier']))
+                    ds_data['missing_disks'].append(disk)
         if len(lv_disks) > 0:
             print ' !!! Zombie disks found:', ','.join(lv_disks)
             logger('! Zombie disks found: '+','.join(lv_disks))
@@ -569,14 +570,15 @@ def checkDataStore(target_id):
             node_sizes = { node : tmp }
         ds_data['average_node_usage'] = (sum(node_sizes.values())/len(node_sizes))
         ds_data['missing_disks'] = [];
-        for disk in db_disk_ids:
-            try:
-                is_disks.remove(disk)
-            except ValueError:
-                print('{}!!! Disk {} found in database is NOT in IS data store {} !!!{}'.format( \
-                    colors.fg.red, disk, ds_data['identifier'], colors.none))
-                logger('! Missing disk {} is in database but not in IS data store {}'.format(disk, ds_data['identifier']))
-                ds_data['missing_disks'].append(disk)
+        if not not db_disk_ids:
+            for disk in db_disk_ids:
+                try:
+                    is_disks.remove(disk)
+                except ValueError:
+                    print('{}!!! Disk {} found in database is NOT in IS data store {} !!!{}'.format( \
+                        colors.fg.red, disk, ds_data['identifier'], colors.none))
+                    logger('! Missing disk {} is in database but not in IS data store {}'.format(disk, ds_data['identifier']))
+                    ds_data['missing_disks'].append(disk)
         if len(is_disks) > 0:
             print ' !!! Zombie disks found:', ','.join(is_disks)
             logger('! Zombie disks found: '+','.join(is_disks))
