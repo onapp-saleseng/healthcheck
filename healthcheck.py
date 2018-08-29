@@ -591,7 +591,7 @@ def checkDataStore(target_id):
         ds_data['zombie_disks'] = is_disks;
         ds_data['data_store_size'] = ((is_ds['total_usable_size']/1024.0)/1024.0)/1024.0
         #ds_data['is_health'] = checkISHealth(ds_data)
-    ds_data['db_disk_size_total'] = int(dsql("SELECT SUM(disk_size) FROM disks WHERE data_store_id={} AND built=1".format(ds_data['id'])))
+    ds_data['db_disk_size_total'] = int(dsql("SELECT SUM(disk_size) FROM disks WHERE data_store_id={} AND built=1".format(ds_data['id'])) or 0)
     return ds_data;
 
 def checkBackups(target):
@@ -712,11 +712,11 @@ def mainFunction():
             tmp['cpu'] = cpuCheck(hv['ip_address'])
             tmp['vm_data'] = { \
                 'off' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                              WHERE booted=0 AND hypervisor_id={} AND deleted_at IS NOT NULL'.format(hv['id'])) ,\
+                              WHERE booted=0 AND hypervisor_id={} AND deleted_at IS NULL'.format(hv['id'])) ,\
                 'on' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                             WHERE booted=1 AND hypervisor_id={} AND deleted_at IS NOT NULL'.format(hv['id'])) ,\
+                             WHERE booted=1 AND hypervisor_id={} AND deleted_at IS NULL'.format(hv['id'])) ,\
                 'failed' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                                 WHERE state="failed" AND hypervisor_id={} AND deleted_at IS NOT NULL'.format(hv['id'])) }
+                                 WHERE state="failed" AND hypervisor_id={} AND deleted_at IS NULL'.format(hv['id'])) }
             if not quiet:
                 #print all the hypervisor data
                 fs = '{:>20s} : {}'
