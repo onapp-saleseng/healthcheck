@@ -16,6 +16,12 @@ import subprocess
 from copy import copy
 from urllib2 import Request, urlopen, URLError, build_opener, HTTPHandler, HTTPError
 
+ONAPP_ROOT = '/onapp'
+ONAPP_CONF_DIR="{}/interface/config".format(ONAPP_ROOT);
+ONAPP_CONF_FILE="{}/on_app.yml".format(ONAPP_CONF_DIR);
+DB_CONF_FILE="{}/database.yml".format(ONAPP_CONF_DIR);
+LOG_FILE="./test.log"
+
 def logger(s):
     l = open(LOG_FILE, "a");
     text = '[{}] - {}\n'.format(str(datetime.datetime.now()),s)
@@ -41,13 +47,6 @@ except ImportError:
     except:
         print "Couldn't install/import MySQL. Please run `yum -y install MySQL-python`."
         raise
-
-ONAPP_ROOT = '/onapp'
-ONAPP_CONF_DIR="{}/interface/config".format(ONAPP_ROOT);
-ONAPP_CONF_FILE="{}/on_app.yml".format(ONAPP_CONF_DIR);
-DB_CONF_FILE="{}/database.yml".format(ONAPP_CONF_DIR);
-LOG_FILE="./test.log"
-
 
 arp = argparse.ArgumentParser(prog='healthcheck', description='Health check for OnApp')
 # arp.add_argument('-a', '--api', help='Enable API', action='store_true')
@@ -491,7 +490,6 @@ def checkComputeZones(zone_id=False):
             'data_store_joins':checkDataJoins(zone_id), 'backup_server_joins':checkBackupJoins(zone_id)}
     return zone_data;
 
-
 def cpuCheck(target=False):
     cpu_model_cmd="grep model\ name /proc/cpuinfo -m1 | cut -d':' -f2 | sed -r -e 's/^ //;s/ $//'"
     cpu_speed_cmd="grep cpu\ MHz /proc/cpuinfo -m1 | cut -d':' -f2 | cut -d'.' -f1 | tr -d ' '"
@@ -508,9 +506,64 @@ def cpuCheck(target=False):
     rData['cores'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, cpu_cores_cmd)])
     return rData;
 
+def motherboardCheck(target=False):
+    base_cmd = "dmidecode -s baseboard-{}"
+    if target is False:
+        return { \
+        'manufacturer' : runCmd(base_cmd.format('manufacturer')) ,
+        'product-name' : runCmd(base_cmd.format('product-name')) ,
+        'version' : runCmd(base_cmd.format('version')) }
+    rData = {};
+    rData['manufacturer'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('manufacturer'))])
+    rData['product-name'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('product-name'))])
+    rData['version'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('version'))])
+    return rData;
+
+def chassisCheck(target=False):
+    base_cmd = "dmidecode -s chassis-{}"
+    if target is False:
+        return { \
+        'manufacturer' : runCmd(base_cmd.format('manufacturer')) ,
+        'type' : runCmd(base_cmd.format('type')) ,
+        'version' : runCmd(base_cmd.format('version')) }
+    rData = {}
+    rData['manufacturer'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('manufacturer'))])
+    rData['type'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('type'))])
+    rData['version'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('version'))])
+    return rData;
+
+def diskHWCheck(target=False):
+    #list_disks_cmd = "lsblk -n -d -e 1,7,11 -oNAME"
+    list_disks_cmd = "lsblk -dn -oNAME -I8,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135"
+    udev_cmd = "bash -c 'eval $(udevadm info --export --query=property --path=/sys/class/block/{}) && echo $ID_VENDOR - $ID_MODEL'"
+    disk_data = {}
+    if target is False:
+        disks = runCmd(list_disks_cmd, shlexy=False, shell=True).split('\n')
+        for d in disks:
+            disk_data[d] = runCmd(udev_cmd.format(d), shlexy=False, shell=True)
+        return disk_data;
+    disks = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, list_disks_cmd)]).split('\n')
+    udev_cmd = "bash -c 'eval \$(udevadm info --export --query=property --path=/sys/class/block/{}) && echo \$ID_VENDOR - \$ID_MODEL'"
+    for d in disks:
+        disk_data[d] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, udev_cmd.format(d))])
+    return disk_data;
+
+def interfaceCheck(target=False):
+    iface_cmd = "find /sys/class/net -type l -not -lname '*virtual*' -printf '/sys/class/net/%f\n'"
+    udev_cmd = "udevadm info --export --query=property --path=`readlink -f {}` | grep ID_MODEL_FROM_DATABASE"
+    iface_data = {}
+    if target is False:
+        iface_list = runCmd(iface_cmd).split('\n')
+        for iface in iface_list:
+            iface_data[iface.split('/')[-1]] = runCmd(udev_cmd.format(iface), shell=True, shlexy=False).split('=')[1].strip("'")
+        return iface_data;
+    iface_list = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, iface_cmd)]).split('\n')
+    udev_cmd = "bash -c 'udevadm info --export --query=property --path=`readlink -f {}` | grep ID_MODEL_FROM_DATABASE'"
+    for iface in iface_list:
+        iface_data[iface.split('/')[-1]] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, udev_cmd.format(iface))]).split('=')[1].strip("'")
+    return iface_data;
 
 #def checkISHealth(ds_data):
-
 
 def checkDataStore(target_id):
     logger("Checking data store id ={}".format(target_id))
@@ -605,7 +658,7 @@ def checkBackups(target):
     bs_data = dpsql("SELECT id, ip_address, capacity FROM backup_servers WHERE id={}".format(target))
     backups_in_db = dsql("SELECT identifier FROM backups WHERE backup_server_id={}".format(target), unlist=False)
     backups_on_server_fullpath = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "ls -d -1 {}/[a-z]/[a-z0-9]/* 2>/dev/null || echo FAIL"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], ONAPP_CONFIG['backups_path'])]).split('\n')
-    if backups_on_server_fullpath == 'FAIL':
+    if backups_on_server_fullpath == ['FAIL'] or backups_on_server_fullpath == '':
         return False
     backups_on_server = [line.replace(ONAPP_CONFIG['backups_path'], '').lstrip('/').split('/')[2] for line in backups_on_server_fullpath]
     for backup in backups_in_db:
@@ -661,7 +714,10 @@ def mainFunction():
         'loadavg' : runCmd("cat /proc/loadavg"), \
         'timezone' : runCmd("readlink /etc/localtime").lstrip('../usr/share/zoneinfo/') , \
         'ip_address' : runCmd("ip route get 1 | awk '{print $NF;exit}'", shell=True, shlexy=False) , \
-        # add ip address here
+        'motherboard' : motherboardCheck(), \
+        'chassis' : chassisCheck(), \
+        'disks' : diskHWCheck(), \
+        'network_interfaces' : interfaceCheck(), \
         'cpu' : cpuCheck()}
     health_data['cp_data']['vm_data'] = { \
         'off' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE booted=0 AND deleted_at IS NULL') ,\
@@ -710,6 +766,10 @@ def mainFunction():
             tmp['ip_address'] = hv['ip_address']
             tmp['label'] = hv['label']
             tmp['cpu'] = cpuCheck(hv['ip_address'])
+            tmp['motherboard'] = motherboardCheck(hv['ip_address'])
+            tmp['chassis'] = chassisCheck(hv['ip_address'])
+            tmp['disks'] = diskHWCheck(hv['ip_address'])
+            tmp['network_interfaces'] = interfaceCheck(hv['ip_address'])
             tmp['vm_data'] = { \
                 'off' : dsql('SELECT count(*) AS count FROM virtual_machines \
                               WHERE booted=0 AND hypervisor_id={} AND deleted_at IS NULL'.format(hv['id'])) ,\
@@ -777,6 +837,10 @@ def mainFunction():
             tmp['ip_address'] = bsid['ip_address']
             tmp['label'] = bsid['label']
             tmp['cpu'] = cpuCheck(bsid['ip_address'])
+            tmp['motherboard'] = motherboardCheck(hv['ip_address'])
+            tmp['chassis'] = chassisCheck(hv['ip_address'])
+            tmp['disks'] = diskHWCheck(hv['ip_address'])
+            tmp['network_interfaces'] = interfaceCheck(hv['ip_address'])
             tmp['connectivity'] = {'storage_network':{}, 'all':{}}
             for t in HOSTS['ZONES'][zone]['HV'].itervalues():
                 tmp['connectivity']['all'][t['id']] = checkHVConn(bsid['ip_address'], t['ip_address'])
