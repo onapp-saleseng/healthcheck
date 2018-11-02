@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python
 import os
 import ast
 import ssl
@@ -17,14 +17,14 @@ from copy import copy
 from urllib2 import Request, urlopen, URLError, build_opener, HTTPHandler, HTTPError
 
 ONAPP_ROOT = '/onapp'
-ONAPP_CONF_DIR="{}/interface/config".format(ONAPP_ROOT);
-ONAPP_CONF_FILE="{}/on_app.yml".format(ONAPP_CONF_DIR);
-DB_CONF_FILE="{}/database.yml".format(ONAPP_CONF_DIR);
+ONAPP_CONF_DIR="{0}/interface/config".format(ONAPP_ROOT);
+ONAPP_CONF_FILE="{0}/on_app.yml".format(ONAPP_CONF_DIR);
+DB_CONF_FILE="{0}/database.yml".format(ONAPP_CONF_DIR);
 LOG_FILE="./test.log"
 
 def logger(s):
     l = open(LOG_FILE, "a");
-    text = '[{}] - {}\n'.format(str(datetime.datetime.now()),s)
+    text = '[{0}] - {1}\n'.format(str(datetime.datetime.now()),s)
     l.write(text)
     l.flush();
     l.close();
@@ -33,7 +33,7 @@ def runCmd(cmd, shell=False, shlexy=True):
     if shlexy and type(cmd) is str:
         cmd = shlex.split(cmd)
     stdout, stderr = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate();
-    if stderr: logger("Command {} failed, stderr: {}".format(cmd, stderr.strip()))
+    if stderr: logger("Command {0} failed, stderr: {1}".format(cmd, stderr.strip()))
     return stdout.strip();
 
 try:
@@ -113,12 +113,12 @@ class OnappException(Exception):
         self.data = d;
         self.func = f;
         self.reason = reason;
-        print('OnappError, Action: {}, Data: {}'.format(f, d))
-        if self.reason: print('Reason: {}'.format(self.reason))
+        print('OnappError, Action: {0}, Data: {1}'.format(f, d))
+        if self.reason: print('Reason: {0}'.format(self.reason))
 
-PASS="{}[+]{}".format(colors.fg.green, colors.reset)
-FAIL="{}[-]{}".format(colors.fg.red, colors.reset)
-CHCK="{}[?]{}".format(colors.fg.orange, colors.reset)
+PASS="{0}[+]{1}".format(colors.fg.green, colors.reset)
+FAIL="{0}[-]{1}".format(colors.fg.red, colors.reset)
+CHCK="{0}[?]{1}".format(colors.fg.orange, colors.reset)
 
 def pullOAConfig(f):
     confDict = {}
@@ -130,6 +130,7 @@ def pullOAConfig(f):
         confDict[tmp[0].strip()] = tmp[1].strip().strip('"').strip("'");
     logger("Gathered OnApp configuration.");
     return confDict;
+
 
 def pullDBConfig(f):
     confDict = {};
@@ -158,11 +159,12 @@ def dbConn(conf=None):
     return SQL.connect(host=conf['host'], user=conf['username'], passwd=conf['password'], db=conf['database'])
 
 def dRunQuery(q, unlist=True):
-    if VERBOSE: logger("Running query:{}".format(' '.join(q.split())))
+    if VERBOSE: logger("Running query:{0}".format(' '.join(q.split())))
     db = dbConn();
     cur = db.cursor();
     cur.execute(q)
-    res = [row for row in cur.fetchall()];
+    res = []
+    for row in cur.fetchall(): res.append(row)
     num_fields = len(cur.description)
     cur.close();
     db.close();
@@ -172,7 +174,9 @@ def dRunQuery(q, unlist=True):
     if len(res) == 0:
         return False
     if num_fields == 1:
-        return [ t[0] for t in res ];
+        ret = []
+        for t in res: ret.append(t[0])
+        return ret;
     return res;
 
 dsql = dRunQuery;
@@ -180,15 +184,17 @@ dsql = dRunQuery;
 #This is the shitty pretty version. Just leaving it in just to shame myself mainly.
 def dRunPrettyQueryLegacy(fields, table, conditions=None):
     if type(fields) == str: fields = [fields];
-    query = 'SELECT {} FROM {}'.format(','.join(fields), table);
+    query = 'SELECT {0} FROM {1}'.format(','.join(fields), table);
     if not not conditions:
-        query += ' WHERE {}'.format(conditions)
+        query += ' WHERE {0}'.format(conditions)
     db = dbConn();
     cur = db.cursor();
     cur.execute(query)
     res = cur.fetchall();
     num_fields = len(cur.description)
-    field_names = [i[0] for i in cur.description]
+    field_names = []
+    for i in cur.description: field_names.append(i[0])
+    # field_names = [i[0] for i in cur.description]
     cur.close();
     db.close();
     if num_fields == 1 and len(res) == 1:
@@ -207,13 +213,15 @@ def dRunPrettyQueryLegacy(fields, table, conditions=None):
     return output;
 
 def dRunPrettyQuery(q, unlist=True):
-    if VERBOSE: logger("Running pretty query:{}".format(' '.join(q.split())))
+    if VERBOSE: logger("Running pretty query:{0}".format(' '.join(q.split())))
     db = dbConn();
     cur = db.cursor();
     cur.execute(q)
     res = cur.fetchall();
     num_fields = len(cur.description)
-    field_names = [i[0] for i in cur.description]
+    field_names = []
+    for i in cur.description: field_names.append(i[0])
+    # field_names = [i[0] for i in cur.description]
     cur.close();
     db.close();
     if num_fields == 1 and len(res) == 1 and unlist:
@@ -257,8 +265,8 @@ dpsql = dRunPrettyQuery;
 API_AUTH = None
 
 def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
-    req = Request("{}{}".format(target, r), json.dumps(data))
-    req.add_header("Authorization", "Basic {}".format(auth))
+    req = Request("{0}{1}".format(target, r), json.dumps(data))
+    req.add_header("Authorization", "Basic {0}".format(auth))
     req.add_header("Accept", "application/json")
     req.add_header("Content-type", "application/json")
     if method: req.get_method = lambda: method;
@@ -271,11 +279,11 @@ def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
         else:
             response = urlopen(req)
     except HTTPError as err:
-        print caller,"called erroneous API request: {}{}, error: {}".format(target, r, str(err))
+        print caller,"called erroneous API request: {0}{1}, error: {2}".format(target, r, str(err))
         return False;
     status = response.getcode()
-    logger('API Call executed - {}{}, Status code: {}'.format(target, r, status));
-    if VERBOSE: print('API Call executed - {}{}, Status code: {}'.format(target, r, status))
+    logger('API Call executed - {0}{1}, Status code: {2}'.format(target, r, status));
+    if VERBOSE: print('API Call executed - {0}{1}, Status code: {2}'.format(target, r, status))
     if   status == 200:
         return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
     elif status == 204:
@@ -284,7 +292,7 @@ def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
         return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
 
 def storageAPICall(target, r, data=None, method=None):
-    req = Request("http://{}:8080{}".format(target, r), data)
+    req = Request("http://{0}:8080{1}".format(target, r), data)
     if method: req.get_method = lambda: method;
     response = urlopen(req)
     status = response.getcode()
@@ -330,25 +338,27 @@ FROM backup_servers \
 WHERE ip_address IS NOT NULL  \
 AND enabled=1 ORDER BY id", unlist=False)
 
-for zid in dsql("SELECT DISTINCT p.id FROM packs AS p \
-                 JOIN hypervisors AS hv ON hv.hypervisor_group_id=p.id \
-                 WHERE p.type='HypervisorGroup' \
-                 GROUP BY p.id \
-                 HAVING count(hv.id) > 0;", unlist=False):
-    HOSTS['ZONES'][zid] = dpsql("SELECT label FROM packs WHERE id={}".format(zid), unlist=False)
+q = "SELECT DISTINCT p.id FROM packs AS p \
+JOIN hypervisors AS hv ON hv.hypervisor_group_id=p.id \
+WHERE p.type='HypervisorGroup' \
+GROUP BY p.id \
+HAVING count(hv.id) > 0;"
+
+for zid in dsql(q, unlist=False):
+    HOSTS['ZONES'][zid] = dpsql("SELECT label FROM packs WHERE id={0}".format(zid), unlist=False)
     HOSTS['ZONES'][zid]['HV'] = {}
-    for hvid in dsql("SELECT id FROM hypervisors WHERE hypervisor_group_id={} AND enabled=1".format(zid), unlist=False):
+    for hvid in dsql("SELECT id FROM hypervisors WHERE hypervisor_group_id={0} AND enabled=1".format(zid), unlist=False):
         HOSTS['ZONES'][zid]['HV'][hvid] = dpsql( \
             "SELECT id, host_id, label, ip_address, hypervisor_type \
-             FROM hypervisors WHERE id={}".format(hvid) )
+             FROM hypervisors WHERE id={0}".format(hvid) )
     bsids = dsql("SELECT id FROM backup_server_joins WHERE \
-        target_join_type='HypervisorGroup' AND target_join_id={}".format(zid), unlist=False)
+        target_join_type='HypervisorGroup' AND target_join_id={0}".format(zid), unlist=False)
     HOSTS['ZONES'][zid]['BS'] = {};
     if bsids:
         for bsid in bsids:
             HOSTS['ZONES'][zid]['BS'][bsid] = dpsql("SELECT id, label, ip_address, 'backup' as hypervisor_type \
-                FROM backup_servers WHERE id={}".format(bsid));
-            HOSTS['ZONES'][zid]['BS'][bsid]['host_id'] = dsql("SELECT host_id FROM hypervisors WHERE ip_address='{}'" \
+                FROM backup_servers WHERE id={0}".format(bsid));
+            HOSTS['ZONES'][zid]['BS'][bsid]['host_id'] = dsql("SELECT host_id FROM hypervisors WHERE ip_address='{0}'" \
                      .format(HOSTS['ZONES'][zid]['BS'][bsid]['ip_address']))
 
 
@@ -392,77 +402,87 @@ for zid in dsql("SELECT DISTINCT p.id FROM packs AS p \
 def checkHVBSStatus(target):
     rData = {};
     vm_list = [];
-    hv_ver_bash_cmd = "ssh -p{} root@{} \"cat /onapp/onapp-store-install.version 2>/dev/null || cat /onapp/onapp-hv-tools.version 2>/dev/null || grep Version /onappstore/package-version.txt 2>/dev/null || echo '???'\""
+    hv_ver_bash_cmd = "ssh -p{0} root@{1} \"cat /onapp/onapp-store-install.version 2>/dev/null || cat /onapp/onapp-hv-tools.version 2>/dev/null || grep Version /onappstore/package-version.txt 2>/dev/null || echo '???'\""
     hv_ver_cmd = [ 'su', 'onapp', '-c', hv_ver_bash_cmd.format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
-    hv_kernel_cmd = [ 'su', 'onapp', '-c', 'ssh -p{} root@{} "uname -r 2>/dev/null" 2>/dev/null'.format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
-    hv_distro_cmd = [ 'su', 'onapp', '-c', 'ssh -p{} root@{} "cat /etc/redhat-release 2>/dev/null" 2>/dev/null'.format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
+    hv_kernel_cmd = [ 'su', 'onapp', '-c', 'ssh -p{0} root@{1} "uname -r 2>/dev/null" 2>/dev/null'.format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
+    hv_distro_cmd = [ 'su', 'onapp', '-c', 'ssh -p{0} root@{1} "cat /etc/redhat-release 2>/dev/null" 2>/dev/null'.format(ONAPP_CONFIG['ssh_port'], target['ip_address']) ]
     rData['version'] = runCmd(hv_ver_cmd);
     rData['kernel'] = runCmd(hv_kernel_cmd);
     rData['distro'] = runCmd(hv_distro_cmd);
-    rData['loadavg'] = runCmd(['su','onapp','-c','ssh -p{} root@{} "cat /proc/loadavg"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
-    rData['memory'] = runCmd(['su','onapp','-c','ssh -p{} root@{} "free -m"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])]).split('\n')[1].split()[1]
-    rData['freemem'] = runCmd(['su','onapp','-c','ssh -p{} root@{} "free -m"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])]).split('\n')[1].split()[2]
-    hv_vms = dsql("SELECT identifier FROM virtual_machines WHERE hypervisor_id = {} AND booted=1 AND identifier IS NOT NULL".format(target['id']), False)
+    rData['loadavg'] = runCmd(['su','onapp','-c','ssh -p{0} root@{1} "cat /proc/loadavg"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
+    rData['memory'] = runCmd(['su','onapp','-c','ssh -p{0} root@{1} "free -m"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])]).split('\n')[1].split()[1]
+    rData['freemem'] = runCmd(['su','onapp','-c','ssh -p{0} root@{1} "free -m"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])]).split('\n')[1].split()[2]
+    hv_vms = dsql("SELECT identifier FROM virtual_machines WHERE hypervisor_id = {0} AND booted=1 AND identifier IS NOT NULL".format(target['id']), False)
     if hv_vms is False:
         hv_vms = [];
+    running_vms = []
     if target['hypervisor_type'] == 'kvm':
-        vm_from_hv = runCmd(['su','onapp','-c','ssh -p{} root@{} "virsh list --state-running"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
+        vm_from_hv = runCmd(['su','onapp','-c','ssh -p{0} root@{1} "virsh list --state-running"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
         vm_list = vm_from_hv.split('\n')
         del vm_list[0]
         del vm_list[0]
-        vm_list = [ t.split()[1] for t in vm_list if "STORAGENODE" not in t.split()[1] ]
+        # print vm_list
+        for t in vm_list:
+            # print "t = ", t
+            if "STORAGENODE" not in t:
+                running_vms.append(t.split()[1])
+        # vm_list = [ t.split()[1] for t in vm_list if "STORAGENODE" not in t.split()[1] ]
     if target['hypervisor_type'] == 'xen':
-        vm_from_hv = runCmd(['su','onapp','-c','ssh -p{} root@{} "xm list --state=running"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
+        vm_from_hv = runCmd(['su','onapp','-c','ssh -p{0} root@{1} "xm list --state=running"'.format(ONAPP_CONFIG['ssh_port'], target['ip_address'])])
         vm_list = vm_from_hv.split('\n')
         del vm_list[0]
-        vm_list = [ x for x in vm_list if 'Domain-0' not in x ]
-        vm_list = [ t.split()[0] for t in vm_list if "STORAGENODE" not in t.split()[1] ]
+        for t in vm_list:
+            # print "t = ", t
+            if "Domain-0" not in t or "STORAGENODE" not in t:
+                running_vms.append(t.split()[1])
+        # vm_list = [ x for x in vm_list if 'Domain-0' not in x ]
+        # vm_list = [ t.split()[0] for t in vm_list if "STORAGENODE" not in t.split()[1] ]
     cloned_hvvms = copy(hv_vms)
     zombie_vms = [];
-    for vm in vm_list:
+    for vm in running_vms:
         try:
             cloned_hvvms.remove(vm)
         except ValueError:
-            print('!!! Virtual Machine {} is booted on the hypervisor but not booted in database !!!'.format(vm))
-            logger('! Virtual Machine {} is bootedon the hypervisor but not booted in database'.format(vm))
+            print('!!! Virtual Machine {0} is booted on the hypervisor but not booted in database !!!'.format(vm))
+            logger('! Virtual Machine {0} is bootedon the hypervisor but not booted in database'.format(vm))
             zombie_vms.append(vm)
     if len(cloned_hvvms) > 0:
         print '!!! Virtual machines found running in database, but not on the hypervisor: ', ','.join(cloned_hvvms)
-        logger('! Virtual machines found running in database, but not on the hypervisor: {}'.format(','.join(cloned_hvvms)))
+        logger('! Virtual machines found running in database, but not on the hypervisor: {0}'.format(','.join(cloned_hvvms)))
     if len(zombie_vms): rData['zombie_vms'] = zombie_vms;
     if len(cloned_hvvms): rData['dead_vms'] = cloned_hvvms;
     #### Create also for xen hypervisors...
     return rData;
 
 def checkHVConn(from_ip, to_ip):
-    cmd = "ssh -p{} root@{} 'ping -w1 {}'".format(ONAPP_CONFIG['ssh_port'], from_ip, to_ip)
+    cmd = "ssh -p{0} root@{1} 'ping -w1 {2}'".format(ONAPP_CONFIG['ssh_port'], from_ip, to_ip)
     rData = runCmd(shlex.split(cmd))
     return 0 if rData == '' else 1
 
 def checkNetJoins(zone_id):
-    network_ids = dsql("SELECT network_id FROM networking_network_joins WHERE target_join_id={}".format(zone_id), unlist=False)
+    network_ids = dsql("SELECT network_id FROM networking_network_joins WHERE target_join_id={0}".format(zone_id), unlist=False)
     if network_ids is False: return False
     labels = [];
     for nid in network_ids:
-        network_label = dsql("SELECT label FROM networking_networks WHERE id={}".format(nid))
+        network_label = dsql("SELECT label FROM networking_networks WHERE id={0}".format(nid))
         labels.append(network_label)
     return labels;
 
 def checkDataJoins(zone_id):
-    datazone_ids = dsql("SELECT data_store_id FROM data_store_joins WHERE target_join_id={}".format(zone_id), unlist=False)
+    datazone_ids = dsql("SELECT data_store_id FROM data_store_joins WHERE target_join_id={0}".format(zone_id), unlist=False)
     if datazone_ids is False: return False
     labels = [];
     for dzid in datazone_ids:
-        datazone_label = dsql("SELECT label FROM data_stores WHERE id={}".format(dzid))
+        datazone_label = dsql("SELECT label FROM data_stores WHERE id={0}".format(dzid))
         labels.append(datazone_label)
     return labels;
 
 def checkBackupJoins(zone_id):
-    backup_ids = dsql("SELECT backup_server_id FROM backup_server_joins WHERE target_join_id={}".format(zone_id), unlist=False)
+    backup_ids = dsql("SELECT backup_server_id FROM backup_server_joins WHERE target_join_id={0}".format(zone_id), unlist=False)
     if backup_ids is False: return False
     labels = [];
     for bsid in backup_ids:
-        backup_label = dsql("SELECT label FROM backup_servers WHERE id={}".format(bsid))
+        backup_label = dsql("SELECT label FROM backup_servers WHERE id={0}".format(bsid))
         labels.append(backup_label)
     return labels;
 
@@ -472,19 +492,19 @@ def checkComputeZones(zone_id=False):
     if zone_id is False and type(zone_ids) is not long:
         all_zone_ids = dsql("SELECT id FROM packs WHERE type='HypervisorGroup'", unlist=False)
         for zid in all_zone_ids:
-            vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zid))
+            vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={0} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zid))
             if vc_check is False: continue
             zone_data[zid] = {'zone_id': zid, 'label':HOSTS['ZONES'][zid]['label'], 'network_joins':checkNetJoins(zid), \
                 'data_store_joins':checkDataJoins(zid), 'backup_server_joins':checkBackupJoins(zid)}
     elif type(zone_id) is list:
         for zid in zone_id:
-            vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zid))
+            vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={0} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zid))
             if len(vc_check) == 0: continue
             zone_data[zid] = {'zone_id':zid, 'label':HOSTS['ZONES'][zid]['label'], 'network_joins':checkNetJoins(zid), \
                 'data_store_joins':checkDataJoins(zid), 'backup_server_joins':checkBackupJoins(zid)}
     else:
         if type(zone_ids) is long: zone_id = zone_ids;
-        vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zone_id))
+        vc_check = dsql("SELECT hypervisor_type FROM hypervisors WHERE hypervisor_group_id={0} AND hypervisor_type NOT IN ('vcenter','vcloud')".format(zone_id))
         if len(vc_check) == 0: logger('Requested hypervisor zone either does not exist or is all vcenter/vcloud')
         zone_data[zid] = {'zone_id':zone_id, 'label':HOSTS['ZONES'][zid]['label'], 'network_joins':checkNetJoins(zone_id), \
             'data_store_joins':checkDataJoins(zone_id), 'backup_server_joins':checkBackupJoins(zone_id)}
@@ -501,107 +521,120 @@ def cpuCheck(target=False):
         'cores':runCmd("grep -c ^processor /proc/cpuinfo") }
         return rData;
     rData = {};
-    rData['model'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, cpu_model_cmd)])
-    rData['speed'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, cpu_speed_cmd)])
-    rData['cores'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, cpu_cores_cmd)])
+    rData['model'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, cpu_model_cmd)])
+    rData['speed'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, cpu_speed_cmd)])
+    rData['cores'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, cpu_cores_cmd)])
     return rData;
 
 def motherboardCheck(target=False):
-    base_cmd = "dmidecode -s baseboard-{}"
+    base_cmd = "dmidecode -s baseboard-{0}"
     if target is False:
         return { \
         'manufacturer' : runCmd(base_cmd.format('manufacturer')) ,
         'product-name' : runCmd(base_cmd.format('product-name')) ,
         'version' : runCmd(base_cmd.format('version')) }
     rData = {};
-    rData['manufacturer'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('manufacturer'))])
-    rData['product-name'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('product-name'))])
-    rData['version'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('version'))])
+    rData['manufacturer'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('manufacturer'))])
+    rData['product-name'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('product-name'))])
+    rData['version'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('version'))])
     return rData;
 
 def chassisCheck(target=False):
-    base_cmd = "dmidecode -s chassis-{}"
+    base_cmd = "dmidecode -s chassis-{0}"
     if target is False:
         return { \
         'manufacturer' : runCmd(base_cmd.format('manufacturer')) ,
         'type' : runCmd(base_cmd.format('type')) ,
         'version' : runCmd(base_cmd.format('version')) }
     rData = {}
-    rData['manufacturer'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('manufacturer'))])
-    rData['type'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('type'))])
-    rData['version'] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('version'))])
+    rData['manufacturer'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('manufacturer'))])
+    rData['type'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('type'))])
+    rData['version'] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, base_cmd.format('version'))])
     return rData;
 
 def diskHWCheck(target=False):
     #list_disks_cmd = "lsblk -n -d -e 1,7,11 -oNAME"
     list_disks_cmd = "lsblk -dn -oNAME -I8,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135"
-    udev_cmd = "bash -c 'eval $(udevadm info --export --query=property --path=/sys/class/block/{}) && echo $ID_VENDOR - $ID_MODEL'"
+    udev_cmd = "bash -c 'eval $(udevadm info --export --query=property --path=/sys/class/block/{0}) && echo $ID_VENDOR - $ID_MODEL'"
     disk_data = {}
     if target is False:
         disks = runCmd(list_disks_cmd, shlexy=False, shell=True).split('\n')
         for d in disks:
             disk_data[d] = runCmd(udev_cmd.format(d), shlexy=False, shell=True)
         return disk_data;
-    disks = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, list_disks_cmd)]).split('\n')
-    udev_cmd = "bash -c 'eval \$(udevadm info --export --query=property --path=/sys/class/block/{}) && echo \$ID_VENDOR - \$ID_MODEL'"
+    disks = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, list_disks_cmd)]).split('\n')
+    udev_cmd = "bash -c 'eval \$(udevadm info --export --query=property --path=/sys/class/block/{0}) && echo \$ID_VENDOR - \$ID_MODEL'"
     for d in disks:
-        disk_data[d] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, udev_cmd.format(d))])
+        disk_data[d] = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, udev_cmd.format(d))])
     return disk_data;
 
 def interfaceCheck(target=False):
     iface_cmd = "find /sys/class/net -type l -not -lname '*virtual*' -printf '/sys/class/net/%f\n'"
-    udev_cmd = "udevadm info --export --query=property --path=`readlink -f {}` | grep ID_MODEL_FROM_DATABASE"
+    udev_cmd = "udevadm info --export --query=property --path=`readlink -f {0}` | grep ID_MODEL_FROM_DATABASE"
     iface_data = {}
     if target is False:
         iface_list = runCmd(iface_cmd).split('\n')
         for iface in iface_list:
-            iface_data[iface.split('/')[-1]] = runCmd(udev_cmd.format(iface), shell=True, shlexy=False).split('=')[1].strip("'")
+            tmpface = runCmd(udev_cmd.format(iface), shell=True, shlexy=False)
+            if tmpface == '':
+                iface_data[iface.split('/')[1]] = 'N/A'
+            else:
+                iface_data[iface.split('/')[-1]] = tmpface.split('=')[1].strip("'")
         return iface_data;
-    iface_list = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, iface_cmd)]).split('\n')
-    udev_cmd = "bash -c 'udevadm info --export --query=property --path=`readlink -f {}` | grep ID_MODEL_FROM_DATABASE'"
+    iface_list = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, iface_cmd)]).split('\n')
+    udev_cmd = "bash -c 'udevadm info --export --query=property --path=`readlink -f {0}` | grep ID_MODEL_FROM_DATABASE'"
     for iface in iface_list:
-        iface_data[iface.split('/')[-1]] = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "{}"'.format(ONAPP_CONFIG['ssh_port'], target, udev_cmd.format(iface))]).split('=')[1].strip("'")
+        tmpface = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "{2}"'.format(ONAPP_CONFIG['ssh_port'], target, udev_cmd.format(iface))])
+        if tmpface == '':
+            iface_data[iface.split('/')[-1]] = 'N/A'
+        else:
+            iface_data[iface.split('/')[-1]] = tmpface.split('=')[1].strip("'")
     return iface_data;
 
 #def checkISHealth(ds_data):
 
 def checkDataStore(target_id):
-    logger("Checking data store id ={}".format(target_id))
-    if VERBOSE: print "Checking data store id {}".format(target_id)
+    logger("Checking data store id = {0}".format(target_id))
+    if VERBOSE: print "Checking data store id {0}".format(target_id)
     ds_data = dpsql("SELECT id, label, identifier, local_hypervisor_id, data_store_size, hypervisor_group_id, \
         integrated_storage_cache_enabled as is_cache_enabled, integrated_storage_cache_settings as is_cache_settings, \
-        io_limits, data_store_type FROM data_stores WHERE id={}".format(target_id))
-    disk_count = dpsql("SELECT count(*) FROM disks WHERE built=1 AND data_store_id={}".format(target_id))
-    db_disk_ids = dsql("SELECT identifier FROM disks WHERE data_store_id={} AND built=1".format(target_id))
+        io_limits, data_store_type FROM data_stores WHERE id={0}".format(target_id))
+    disk_count = dpsql("SELECT count(*) FROM disks WHERE built=1 AND data_store_id={0}".format(target_id))
+    db_disk_ids = dsql("SELECT identifier FROM disks WHERE data_store_id={0} AND built=1".format(target_id))
     ds_data['disk_count'] = disk_count;
     hv_id = dsql("SELECT target_join_id FROM data_store_joins WHERE data_store_id=1 AND target_join_type='HypervisorGroup'")
     # The HV_ID should never return a list because data stores should only be able to be joined to one zone at a time.
     # zombie disks
     if ds_data['data_store_type'] == 'lvm':
         if ds_data['local_hypervisor_id'] is not None:
-            target_ip = dsql("SELECT ip_address FROM hypervisors WHERE id={}".format(ds_data['local_hypervisor_id']))
-            if VERBOSE: print("Using local hypervisor at {}".format(target_ip))
-            logger("Using local hypervisor at {}".format(target_ip))
+            target_ip = dsql("SELECT ip_address FROM hypervisors WHERE id={0}".format(ds_data['local_hypervisor_id']))
+            if VERBOSE: print("Using local hypervisor at {0}".format(target_ip))
+            logger("Using local hypervisor at {0}".format(target_ip))
         else:
-            target_ip = dsql("SELECT ip_address FROM hypervisors WHERE hypervisor_group_id={} LIMIT 1".format(ds_data['hypervisor_group_id']))
-            if VERBOSE: print("Using first hypervisor at {} from group id {}".format(target_ip, ds_data['hypervisor_group_id']))
-            logger("Using first hypervisor at {} from group id {}".format(target_ip, ds_data['hypervisor_group_id']))
-        lvs_output = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "lvs {} --noheadings"'.format(ONAPP_CONFIG['ssh_port'], target_ip, ds_data['identifier'])])
-        lv_disks = [line.split()[0] for line in lvs_output];
+            target_ip = dsql("SELECT ip_address FROM hypervisors WHERE hypervisor_group_id={0} LIMIT 1".format(ds_data['hypervisor_group_id']))
+            if VERBOSE: print("Using first hypervisor at {0} from group id {1}".format(target_ip, ds_data['hypervisor_group_id']))
+            logger("Using first hypervisor at {0} from group id {1}".format(target_ip, ds_data['hypervisor_group_id']))
+        lvs_output = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "lvs {2} --noheadings"'.format(ONAPP_CONFIG['ssh_port'], target_ip, ds_data['identifier'])])
+        lv_disks = []
+        for line in lvs_output:
+            lv_disks.append(line.split()[0])
+        # lv_disks = [line.split()[0] for line in lvs_output];
         logger("Adding all LVM disk sizes together. ")
         if VERBOSE: print "Adding all LVM disk sizes together"
-        lv_sizes = [ float(n) for n in runCmd("lvs -o LV_SIZE --noheadings --units g --nosuffix").split() ]
+        lv_sizes = []
+        for n in runCmd("lvs -o LV_SIZE --noheadings --units g --nosuffix").split(): lv_sizes.append(float(n))
+        # lv_sizes = [ float(n) for n in runCmd("lvs -o LV_SIZE --noheadings --units g --nosuffix").split() ]
         lv_size_sum = sum(lv_sizes)
-        if VERBOSE: print "Total size: {}g".format(lv_size_sum)
-        logger("Total size: {}g".format(lv_size_sum))
+        if VERBOSE: print "Total size: {0}g".format(lv_size_sum)
+        logger("Total size: {0}g".format(lv_size_sum))
         ds_data['missing_disks'] = [];
         if not not db_disk_ids:
             for disk in db_disk_ids:
                 try:
                     lv_disks.remove(disk)
                 except ValueError:
-                    print('!!! Disk {} found in database is NOT in LVM data store {} !!!'.format(disk, ds_data['identifier']))
-                    logger('! Missing disk {} is in database but not in LVM data store {}'.format(disk, ds_data['identifier']))
+                    print('!!! Disk {0} found in database is NOT in LVM data store {1} !!!'.format(disk, ds_data['identifier']))
+                    logger('! Missing disk {0} is in database but not in LVM data store {1}'.format(disk, ds_data['identifier']))
                     ds_data['missing_disks'].append(disk)
         if len(lv_disks) > 0:
             print ' !!! Zombie disks found:', ','.join(lv_disks)
@@ -609,17 +642,17 @@ def checkDataStore(target_id):
             if DISPLAY_COMMANDS:
                 print 'Displaying removal commands for zombie disks: '
                 for disk in lv_disks:
-                    print 'rm -f /dev/{}/{}'.format(ds_data['identifier'], disk)
+                    print 'rm -f /dev/{0}/{1}'.format(ds_data['identifier'], disk)
         ds_data['zombie_disks'] = lv_disks;
         ds_data['hv_disk_size_total'] = lv_size_sum;
     if ds_data['data_store_type'] == 'is':
-        target_ip = dsql("SELECT ip_address FROM hypervisors WHERE hypervisor_group_id={} \
+        target_ip = dsql("SELECT ip_address FROM hypervisors WHERE hypervisor_group_id={0} \
             AND host_id IS NOT NULL LIMIT 1".format(ds_data['hypervisor_group_id']))
-        is_ds = stapi(target=target_ip,r='/is/Datastore/{}'.format(ds_data['identifier']))[ds_data['identifier']]
+        is_ds = stapi(target=target_ip,r='/is/Datastore/{0}'.format(ds_data['identifier']))[ds_data['identifier']]
         is_disks = is_ds['vdisks'].split(',')
         node_sizes = {}
         for node in is_ds['members'].split(','):
-            tmp = stapi(target_ip, '/is/Node/{}'.format(node))[node]['utilization']
+            tmp = stapi(target_ip, '/is/Node/{0}'.format(node))[node]['utilization']
             node_sizes = { node : tmp }
         ds_data['average_node_usage'] = (sum(node_sizes.values())/len(node_sizes))
         ds_data['missing_disks'] = [];
@@ -628,9 +661,9 @@ def checkDataStore(target_id):
                 try:
                     is_disks.remove(disk)
                 except ValueError:
-                    print('{}!!! Disk {} found in database is NOT in IS data store {} !!!{}'.format( \
+                    print('{0}!!! Disk {1} found in database is NOT in IS data store {2} !!!{3}'.format( \
                         colors.fg.red, disk, ds_data['identifier'], colors.none))
-                    logger('! Missing disk {} is in database but not in IS data store {}'.format(disk, ds_data['identifier']))
+                    logger('! Missing disk {0} is in database but not in IS data store {1}'.format(disk, ds_data['identifier']))
                     ds_data['missing_disks'].append(disk)
         if len(is_disks) > 0:
             print ' !!! Zombie disks found:', ','.join(is_disks)
@@ -638,13 +671,13 @@ def checkDataStore(target_id):
             if DISPLAY_COMMANDS:
                 print 'Displaying removal commands for zombie disks(check that these disks are not mounted first): '
                 for disk in is_disks:
-                    print 'onappstore offline uuid={}'.format(disk)
+                    print 'onappstore offline uuid={0}'.format(disk)
                 for disk in is_disks:
-                    print 'onappstore remove uuid={}'.format(disk)
+                    print 'onappstore remove uuid={0}'.format(disk)
         ds_data['zombie_disks'] = is_disks;
         ds_data['data_store_size'] = ((is_ds['total_usable_size']/1024.0)/1024.0)/1024.0
         #ds_data['is_health'] = checkISHealth(ds_data)
-    ds_data['db_disk_size_total'] = int(dsql("SELECT SUM(disk_size) FROM disks WHERE data_store_id={} AND built=1".format(ds_data['id'])) or 0)
+    ds_data['db_disk_size_total'] = int(dsql("SELECT SUM(disk_size) FROM disks WHERE data_store_id={0} AND built=1".format(ds_data['id'])) or 0)
     return ds_data;
 
 def checkBackups(target):
@@ -652,22 +685,25 @@ def checkBackups(target):
         target = target['id']
     else:
         raise ValueError('Backup Server ID not found when calling checkBackups')
-    if VERBOSE: print "Checking backups on server id {}".format(target)
+    if VERBOSE: print "Checking backups on server id {0}".format(target)
     data = {'missing':[], 'zombie':[]};
     # go through one backup server and check the backups with those in the database.
-    bs_data = dpsql("SELECT id, ip_address, capacity FROM backup_servers WHERE id={}".format(target))
-    backups_in_db = dsql("SELECT identifier FROM backups WHERE backup_server_id={}".format(target), unlist=False)
-    backups_on_server_fullpath = runCmd(['su', 'onapp', '-c', 'ssh -p{} root@{} "ls -d -1 {}/[a-z]/[a-z0-9]/* 2>/dev/null || echo FAIL"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], ONAPP_CONFIG['backups_path'])]).split('\n')
+    bs_data = dpsql("SELECT id, ip_address, capacity FROM backup_servers WHERE id={0}".format(target))
+    backups_in_db = dsql("SELECT identifier FROM backups WHERE backup_server_id={0}".format(target), unlist=False)
+    backups_on_server_fullpath = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "ls -d -1 {2}/[a-z]/[a-z0-9]/* 2>/dev/null || echo FAIL"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], ONAPP_CONFIG['backups_path'])]).split('\n')
     if backups_on_server_fullpath == ['FAIL'] or backups_on_server_fullpath == '':
         return False
-    backups_on_server = [line.replace(ONAPP_CONFIG['backups_path'], '').lstrip('/').split('/')[2] for line in backups_on_server_fullpath]
+    backups_on_server = []
+    for line in backups_on_server_fullpath:
+        backups_on_server.append(line.replace(ONAPP_CONFIG['backups_path'], '').lstrip('/').split('/')[2])
+    # backups_on_server = [line.replace(ONAPP_CONFIG['backups_path'], '').lstrip('/').split('/')[2] for line in backups_on_server_fullpath]
     for backup in backups_in_db:
         try:
             backups_on_server.remove(backup);
         except ValueError:
-            print('{}!!! Backup found in database but not on disk at {}/{}/{}/{} on backup server {}{}'.format( \
+            print('{0}!!! Backup found in database but not on disk at {1}/{2}/{3}/{4} on backup server {5}{6}'.format( \
                 colors.fg.red, ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup, bs_data['ip_address'], colors.none))
-            logger('!!! Backup found in database but not on disk at {}/{}/{}/{} on backup server {}'.format( \
+            logger('!!! Backup found in database but not on disk at {0}/{1}/{2}/{3} on backup server {4}'.format( \
                 ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup, bs_data['ip_address']))
             data['missing'].append(backup)
     if len(backups_on_server) > 0:
@@ -676,7 +712,7 @@ def checkBackups(target):
         if DISPLAY_COMMANDS:
             print 'Displaying removal commands for zombie backups: '
             for backups in backups_on_server:
-                print 'rm -rf {}/{}/{}/{}'.format(ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup)
+                print 'rm -rf {0}/{1}/{2}/{3}'.format(ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup)
     data['zombie'] = backups_on_server;
     return data;
     # maybe have it come check disk space vs the database sizes to find "empty" backups?
@@ -725,7 +761,7 @@ def mainFunction():
         'failed' : dsql('SELECT count(*) AS count FROM virtual_machines WHERE state="failed" AND deleted_at IS NULL') }
     health_data['cp_data']['zones'] = checkComputeZones();
     if not quiet:
-        fs = '{:>20s} : {}'
+        fs = '{0:>20s} : {2}'
         print fs.format('Version', health_data['cp_data']['version'])
         print fs.format('Kernel', health_data['cp_data']['kernel'])
         print fs.format('Distribution', health_data['cp_data']['distro'])
@@ -734,13 +770,13 @@ def mainFunction():
         print fs.format('Load Average', health_data['cp_data']['loadavg'])
         print fs.format('Timezone', health_data['cp_data']['timezone'])
         print fs.format('CPU Model', health_data['cp_data']['cpu']['model'])
-        print '{:>20s} : {} MHz'.format('CPU Speed', health_data['cp_data']['cpu']['speed'])
+        print '{0:>20s} : {2} MHz'.format('CPU Speed', health_data['cp_data']['cpu']['speed'])
         print fs.format('CPU Cores', health_data['cp_data']['cpu']['cores'])
-        print fs.format('Total VMs ON / OFF', '{} / {}'.format( \
+        print fs.format('Total VMs ON / OFF', '{0} / {2}'.format( \
             health_data['cp_data']['vm_data']['off'], health_data['cp_data']['vm_data']['on']))
         if health_data['cp_data']['vm_data']['failed'] is not False:
             print fs.format('Total VMs FAIL', health_data['cp_data']['vm_data']['failed'])
-        print '{:-^45}'.format('')
+        print '{0:-^45}'.format('')
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     for zone in health_data['cp_data']['zones'].keys():
         health_data['cp_data']['zones'][zone]['hypervisors'] = {}
@@ -752,7 +788,7 @@ def mainFunction():
             tmp = {};
             tmp['connectivity'] = {'storage_network':{}, 'all':{}}
             ping_cmd = [ 'ping', hv['ip_address'], '-w1' ]
-            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -o ConnectTimeout=10 -p{} root@{} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
+            ssh_cmd = [ 'su',  'onapp',  '-c', "ssh -o ConnectTimeout=10 -p{0} root@{1} \'echo connected\'".format(ONAPP_CONFIG['ssh_port'], hv['ip_address']) ]
             tmp['connectivity']['ping'] = 0 if runCmd(ping_cmd) == '' else 1;
             tmp['connectivity']['ssh'] = 0 if runCmd(ssh_cmd) == '' else 1;
             tmp['connectivity']['snmp'] = 0 if sock.connect_ex((hv['ip_address'], 161)) == 0 else 1;
@@ -772,30 +808,30 @@ def mainFunction():
             tmp['network_interfaces'] = interfaceCheck(hv['ip_address'])
             tmp['vm_data'] = { \
                 'off' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                              WHERE booted=0 AND hypervisor_id={} AND deleted_at IS NULL'.format(hv['id'])) ,\
+                              WHERE booted=0 AND hypervisor_id={0} AND deleted_at IS NULL'.format(hv['id'])) ,\
                 'on' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                             WHERE booted=1 AND hypervisor_id={} AND deleted_at IS NULL'.format(hv['id'])) ,\
+                             WHERE booted=1 AND hypervisor_id={0} AND deleted_at IS NULL'.format(hv['id'])) ,\
                 'failed' : dsql('SELECT count(*) AS count FROM virtual_machines \
-                                 WHERE state="failed" AND hypervisor_id={} AND deleted_at IS NULL'.format(hv['id'])) }
+                                 WHERE state="failed" AND hypervisor_id={0} AND deleted_at IS NULL'.format(hv['id'])) }
             if not quiet:
                 #print all the hypervisor data
-                fs = '{:>20s} : {}'
-                if hv['hypervisor_type'] == 'backup': print 'Backup Server ID {}'.format(tmp['id'])
-                else: print 'Hypervisor ID {}'.format(tmp['id'])
+                fs = '{0:>20s} : {1}'
+                if hv['hypervisor_type'] == 'backup': print 'Backup Server ID {0}'.format(tmp['id'])
+                else: print 'Hypervisor ID {0}'.format(tmp['id'])
                 print fs.format('Label', tmp['label'])
                 print fs.format('IP Address', tmp['ip_address'])
-                print fs.format('Seen via', 'Ping:{}, SSH:{}, SNMP:{}'.format( \
+                print fs.format('Seen via', 'Ping:{0}, SSH:{1}, SNMP:{2}'.format( \
                     PASS if tmp['ping'] else FAIL, \
                     PASS if tmp['ssh'] else FAIL, \
                     PASS if tmp['snmp'] else FAIL))
                 print fs.format('CPU Model', tmp['cpu']['model'])
-                print fs.format('Cores', '{} @ {} MHz'.format(tmp['cpu']['cores'], tmp['cpu']['speed']))
+                print fs.format('Cores', '{0} @ {1} MHz'.format(tmp['cpu']['cores'], tmp['cpu']['speed']))
                 print fs.format('Kernel', tmp['kernel'])
                 print fs.format('Distro', tmp['distro'])
                 print fs.format('OnApp Version', tmp['version'])
-                print fs.format('Memory', '{} free / {} MB'.format(tmp['freemem'], tmp['memory']))
+                print fs.format('Memory', '{0} free / {1} MB'.format(tmp['freemem'], tmp['memory']))
                 print fs.format('Loadavg', tmp['loadavg'])
-                print fs.format('Total VMs ON / OFF', '{} / {}'.format(tmp['vm_data']['on'], tmp['vm_data']['off']))
+                print fs.format('Total VMs ON / OFF', '{0} / {1}'.format(tmp['vm_data']['on'], tmp['vm_data']['off']))
                 if tmp['vm_data']['failed'] > 0:
                     print fs.format('Total VMs FAILED', tmp['vm_data']['failed'])
                 if 'zombie_vms' in tmp.keys():
@@ -804,12 +840,12 @@ def mainFunction():
             for t in HOSTS['ZONES'][zone]['HV'].itervalues():
                 tmp['connectivity']['all'][t['id']] = checkHVConn(hv['ip_address'], t['ip_address'])
             for t in HOSTS['ZONES'][zone]['BS'].itervalues():
-                tmp['connectivity']['all']['B{}'.format(t['id'])] = checkHVConn(hv['ip_address'], t['ip_address'])
+                tmp['connectivity']['all']['B{0}'.format(t['id'])] = checkHVConn(hv['ip_address'], t['ip_address'])
             if hv['host_id']:
                 for t in HOSTS['ZONES'][zone]['HV'].itervalues():
-                    tmp['connectivity']['storage_network'][t['id']] = checkHVConn(hv['ip_address'], '10.200.{}.254'.format(t['host_id']))
+                    tmp['connectivity']['storage_network'][t['id']] = checkHVConn(hv['ip_address'], '10.200.{0}.254'.format(t['host_id']))
                 for t in HOSTS['ZONES'][zone]['BS'].itervalues():
-                    tmp['connectivity']['storage_network']['B{}'.format(t['id'])] = checkHVConn(hv['ip_address'], '10.200.{}.254'.format(t['host_id']))
+                    tmp['connectivity']['storage_network']['B{0}'.format(t['id'])] = checkHVConn(hv['ip_address'], '10.200.{0}.254'.format(t['host_id']))
             health_data['cp_data']['zones'][zone]['hypervisors'][hv['id']] = tmp
         # if not quiet:
         #     #gotta unfuckulate this with the new abstructuration
@@ -845,32 +881,32 @@ def mainFunction():
             for t in HOSTS['ZONES'][zone]['HV'].itervalues():
                 tmp['connectivity']['all'][t['id']] = checkHVConn(bsid['ip_address'], t['ip_address'])
             for t in HOSTS['ZONES'][zone]['BS'].itervalues():
-                tmp['connectivity']['all']['B{}'.format(t['id'])] = checkHVConn(bsid['ip_address'], t['ip_address'])
+                tmp['connectivity']['all']['B{0}'.format(t['id'])] = checkHVConn(bsid['ip_address'], t['ip_address'])
             if bsid['host_id']:
                 for t in HOSTS['ZONES'][zone]['HV'].itervalues():
-                    tmp['connectivity']['storage_network'][t['id']] = checkHVConn(bsid['ip_address'], '10.200.{}.254'.format(t['host_id']))
+                    tmp['connectivity']['storage_network'][t['id']] = checkHVConn(bsid['ip_address'], '10.200.{0}.254'.format(t['host_id']))
                 for t in HOSTS['ZONES'][zone]['BS'].itervalues():
-                    tmp['connectivity']['storage_network']['B{}'.format(t['id'])] = checkHVConn(bsid['ip_address'], '10.200.{}.254'.format(t['host_id']))
+                    tmp['connectivity']['storage_network']['B{0}'.format(t['id'])] = checkHVConn(bsid['ip_address'], '10.200.{0}.254'.format(t['host_id']))
             health_data['cp_data']['zones'][zone]['backup_servers'][bsid['id']] = tmp
             if not quiet:
                 print fs.format('Label', tmp['label'])
                 print fs.format('IP Address', tmp['ip_address'])
-                print fs.format('Seen via', 'Ping:{}, SSH:{}, SNMP:{}'.format( \
+                print fs.format('Seen via', 'Ping:{0}, SSH:{1}, SNMP:{2}'.format( \
                     PASS if tmp['ping'] else FAIL, \
                     PASS if tmp['ssh'] else FAIL, \
                     PASS if tmp['snmp'] else FAIL))
                 print fs.format('CPU Model', tmp['cpu']['model'])
-                print fs.format('Cores', '{} @ {} MHz'.format(tmp['cpu']['cores'], tmp['cpu']['speed']))
+                print fs.format('Cores', '{0} @ {1} MHz'.format(tmp['cpu']['cores'], tmp['cpu']['speed']))
                 print fs.format('Kernel', tmp['kernel'])
                 print fs.format('Distro', tmp['distro'])
                 print fs.format('OnApp Version', tmp['version'])
-                print fs.format('Memory', '{} free / {} MB'.format(tmp['freemem'], tmp['memory']))
+                print fs.format('Memory', '{0} free / {1} MB'.format(tmp['freemem'], tmp['memory']))
                 print fs.format('Loadavg', tmp['loadavg'])
                 if len(tmp['backups_data']['zombie']) > 0:
-                    print "Zombie Backups found: {}".format(tmp['backups_data']['zombie'])
+                    print "Zombie Backups found: {0}".format(tmp['backups_data']['zombie'])
                 if len(tmp['backups_data']['missing']) > 0:
-                    print "Missing backups found: {}".format(tmp['backups_data']['missing'])
-                print '{:-^45}'.format('')
+                    print "Missing backups found: {0}".format(tmp['backups_data']['missing'])
+                print '{0:-^45}'.format('')
         data_store_ids = dsql('SELECT dsj.data_store_id FROM data_store_joins dsj \
                                JOIN data_stores ds ON ds.id = dsj.data_store_id \
                                WHERE dsj.target_join_id=3 AND ds.enabled=1', unlist=False)
@@ -880,12 +916,12 @@ def mainFunction():
                 health_data['cp_data']['zones'][zone]['data_stores'][dsid] = checkDataStore(dsid)
         else: health_data['cp_data']['zones'][zone]['data_stores'] = {};
         if not quiet and data_store_ids:
-            print "Datastores found: {}".format(data_store_ids)
+            print "Datastores found: {0}".format(data_store_ids)
     tran_query = "SELECT \
         action, associated_object_type, associated_object_id, \
         created_at, started_at, updated_at \
-      FROM transactions WHERE status='{}' AND \
-      created_at >= (CURDATE() - INTERVAL {} DAY) \
+      FROM transactions WHERE status='{0}' AND \
+      created_at >= (CURDATE() - INTERVAL {1} DAY) \
       ORDER BY created_at"
     failed_trans=dpsql(tran_query.format("failed", TRANSACTION_DURATION), unlist=False)
     pending_trans=dpsql(tran_query.format("pending", TRANSACTION_DURATION), unlist=False)
@@ -905,8 +941,8 @@ def mainFunction():
 if __name__ == "__main__":
     health_data = mainFunction();
     if API_TOKEN:
-        response = apiCall('/api/healthcheck?token={}'.format(API_TOKEN), data=json.dumps(health_data), method='POST', target=API_TARGET)
+        response = apiCall('/api/healthcheck?token={0}'.format(API_TOKEN), data=json.dumps(health_data), method='POST', target=API_TARGET)
         if 'success' not in response.keys():
             raise OnappException(response, 'apiCall', 'Success key was not found in response.')
         else:
-            print 'View the healthcheck at: {}/healthcheck/{}'.format(API_TARGET, response['success']);
+            print 'View the healthcheck at: {0}/healthcheck/{1}'.format(API_TARGET, response['success']);
