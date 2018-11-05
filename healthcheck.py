@@ -707,8 +707,8 @@ def checkBackups(target):
                 ONAPP_CONFIG['backups_path'], backup[0], backup[1], backup, bs_data['ip_address']))
             data['missing'].append(backup)
     if len(backups_on_server) > 0:
-        print(colors.fg.yellow, '!!! Zombie backups found: ', ','.join(backups_on_server), colors.fg.none)
-        logger('!!! Zombie backups found: ', ','.join(backups_on_server))
+        print(colors.fg.yellow, '!!! Zombie backups found: ', ','.join(backups_on_server), colors.none)
+        logger('!!! Zombie backups found: {0}'.format(','.join(backups_on_server)))
         if DISPLAY_COMMANDS:
             print 'Displaying removal commands for zombie backups: '
             for backups in backups_on_server:
