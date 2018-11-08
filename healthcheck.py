@@ -8,6 +8,7 @@ import shlex
 import base64
 import socket
 import random
+import httplib
 import inspect
 import argparse
 import datetime
@@ -21,6 +22,8 @@ ONAPP_CONF_DIR="{0}/interface/config".format(ONAPP_ROOT);
 ONAPP_CONF_FILE="{0}/on_app.yml".format(ONAPP_CONF_DIR);
 DB_CONF_FILE="{0}/database.yml".format(ONAPP_CONF_DIR);
 LOG_FILE="./test.log"
+
+PY_VER=sys.version_info
 
 def logger(s):
     l = open(LOG_FILE, "a");
@@ -243,26 +246,31 @@ def dRunPrettyQuery(q, unlist=True):
 
 dpsql = dRunPrettyQuery;
 
-# def pullAPIKey():
-#     res = dsql("SELECT api_key FROM users WHERE id={}".format(USER_ID));
-#     if res == None:
-#         raise OnappException(res, 'pullAPIKey', 'API Key is not in database. \
-#         Please generate API key for user id {}, or specify a different user id.'.format(USER_ID));
-#     logger("Pulled API key from database.");
-#     return res;
-#
-# def pullAPIEmail():
-#     res = dsql("SELECT email FROM users WHERE id={}".format(USER_ID));
-#     if res == None:
-#         raise OnappException(res, 'pullAPIEmail', 'Admin email is not in database. \
-#         Please fill in e-mail for user id {}, or specify a different user id.'.format(USER_ID));
-#     logger("Pulled API Email from database.");
-#     return res;
-#
-# try:
-#     API_AUTH = base64.encodestring("{}:{}".format(pullAPIEmail(), pullAPIKey())).replace('\n', '');
-# except OnappException:
 API_AUTH = None
+
+def apiCallForBadPython(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
+    headers = { \
+        'Content-type': 'application/json', \
+        'Accept': 'application/json', \
+        'Authorization': 'Basic {0}'.format(auth)}
+    if target.startswith('https://'):
+        conn = httplib.HTTPSConnection(API_TARGET.lstrip('https://'))
+    elif target.startswith('http://'):
+        conn = httplib.HTTPConnection(API_TARGET.lstrip('http://'))
+    else:
+        raise ValueError('API Target must provide http:// or https://')
+    conn.request(method, r, json.dumps(data), headers)
+    response = conn.getresponse()
+    status = response.status
+    logger('API Call executed - {0}{1}, Status code: {2}'.format(target, r, status));
+    if VERBOSE: print('API Call executed - {0}{1}, Status code: {2}'.format(target, r, status))
+    if   status == 200:
+        return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
+    elif status == 204:
+        return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
+    elif status == 201:
+        return ast.literal_eval(response.read().replace('null', 'None').replace('true', 'True').replace('false', 'False')) or True;
+    return True;
 
 def apiCall(r, data=None, method='GET', target=API_TARGET, auth=API_AUTH):
     req = Request("{0}{1}".format(target, r), json.dumps(data))
@@ -933,7 +941,9 @@ def mainFunction():
     health_data['cp_data']['transactions']['pending'] = pending_trans;
     health_data['cp_data']['transactions']['failed'] = failed_trans;
     #print health_data;
-    if VERBOSE or not API_TOKEN: print json.dumps(health_data, indent=2)
+    if VERBOSE or not API_TOKEN:
+        print json.dumps(health_data, indent=2)
+        print health_data
     logger(health_data)
     logger(json.dumps(health_data, indent=2))
     return health_data;
@@ -941,7 +951,12 @@ def mainFunction():
 if __name__ == "__main__":
     health_data = mainFunction();
     if API_TOKEN:
-        response = apiCall('/api/healthcheck?token={0}'.format(API_TOKEN), data=json.dumps(health_data), method='POST', target=API_TARGET)
+        if PY_VER > (2, 7):
+            response = apiCall('/api/healthcheck?token={0}'.format(API_TOKEN), data=health_data, method='POST', target=API_TARGET)
+        elif PY_VER > (2, 6):
+            response = apiCallForBadPython('/api/healthcheck?token={0}'.format(API_TOKEN), data=health_data, method='POST', target=API_TARGET)
+        else:
+            raise
         if 'success' not in response.keys():
             raise OnappException(response, 'apiCall', 'Success key was not found in response.')
         else:
