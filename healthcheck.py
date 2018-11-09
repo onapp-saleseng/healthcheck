@@ -359,7 +359,7 @@ for zid in dsql(q, unlist=False):
         HOSTS['ZONES'][zid]['HV'][hvid] = dpsql( \
             "SELECT id, host_id, label, ip_address, hypervisor_type \
              FROM hypervisors WHERE id={0}".format(hvid) )
-    bsids = dsql("SELECT id FROM backup_server_joins WHERE \
+    bsids = dsql("SELECT backup_server_id FROM backup_server_joins WHERE \
         target_join_type='HypervisorGroup' AND target_join_id={0}".format(zid), unlist=False)
     HOSTS['ZONES'][zid]['BS'] = {};
     if bsids:
