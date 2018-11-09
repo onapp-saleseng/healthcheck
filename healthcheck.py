@@ -23,6 +23,8 @@ ONAPP_CONF_FILE="{0}/on_app.yml".format(ONAPP_CONF_DIR);
 DB_CONF_FILE="{0}/database.yml".format(ONAPP_CONF_DIR);
 LOG_FILE="./test.log"
 
+VERBOSE=False
+
 PY_VER=sys.version_info
 
 def logger(s):
@@ -35,6 +37,7 @@ def logger(s):
 def runCmd(cmd, shell=False, shlexy=True):
     if shlexy and type(cmd) is str:
         cmd = shlex.split(cmd)
+    if VERBOSE: print 'Running:', ' '.join(cmd) if type(cmd) is list else cmd
     stdout, stderr = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate();
     if stderr: logger("Command {0} failed, stderr: {1}".format(cmd, stderr.strip()))
     return stdout.strip();
@@ -464,7 +467,7 @@ def checkHVBSStatus(target):
 
 def checkHVConn(from_ip, to_ip):
     cmd = "ssh -p{0} root@{1} 'ping -w1 {2}'".format(ONAPP_CONFIG['ssh_port'], from_ip, to_ip)
-    rData = runCmd(shlex.split(cmd))
+    rData = runCmd(['su', 'onapp', '-c', cmd])
     return 0 if rData == '' else 1
 
 def checkNetJoins(zone_id):
