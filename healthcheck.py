@@ -566,7 +566,6 @@ def chassisCheck(target=False):
 def diskHWCheck(target=False):
     #list_disks_cmd = "lsblk -n -d -e 1,7,11 -oNAME"
     list_disks_cmd = "lsblk -dn -oNAME -I8,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135"
-    udev_cmd = "bash -c 'eval $(udevadm info --export --query=property --path=/sys/class/block/{0}) && echo $ID_VENDOR - $ID_MODEL'"
     disk_data = {}
     if target is False:
         disks = runCmd(list_disks_cmd, shlexy=False, shell=True).split('\n')
@@ -613,7 +612,7 @@ def checkDataStore(target_id):
     disk_count = dpsql("SELECT count(*) FROM disks WHERE built=1 AND data_store_id={0}".format(target_id))
     db_disk_ids = dsql("SELECT identifier FROM disks WHERE data_store_id={0} AND built=1".format(target_id))
     ds_data['disk_count'] = disk_count;
-    hv_id = dsql("SELECT target_join_id FROM data_store_joins WHERE data_store_id=1 AND target_join_type='HypervisorGroup'")
+    hv_zone_id = dsql("SELECT target_join_id FROM data_store_joins WHERE data_store_id={0} AND target_join_type='HypervisorGroup'".format(target_id))
     # The HV_ID should never return a list because data stores should only be able to be joined to one zone at a time.
     # zombie disks
     if ds_data['data_store_type'] == 'lvm':
@@ -622,10 +621,10 @@ def checkDataStore(target_id):
             if VERBOSE: print("Using local hypervisor at {0}".format(target_ip))
             logger("Using local hypervisor at {0}".format(target_ip))
         else:
-            target_ip = dsql("SELECT ip_address FROM hypervisors WHERE hypervisor_group_id={0} LIMIT 1".format(ds_data['hypervisor_group_id']))
-            if VERBOSE: print("Using first hypervisor at {0} from group id {1}".format(target_ip, ds_data['hypervisor_group_id']))
-            logger("Using first hypervisor at {0} from group id {1}".format(target_ip, ds_data['hypervisor_group_id']))
-        lvs_output = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "lvs {2} --noheadings"'.format(ONAPP_CONFIG['ssh_port'], target_ip, ds_data['identifier'])])
+            target_ip = dsql("SELECT ip_address FROM hypervisors WHERE hypervisor_group_id={0} LIMIT 1".format(hv_zone_id))
+            if VERBOSE: print("Using first hypervisor at {0} from group id {1}".format(target_ip, hv_zone_id))
+            logger("Using first hypervisor at {0} from group id {1}".format(target_ip, hv_zone_id))
+        lvs_output = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "lvs {2} --noheadings"'.format(ONAPP_CONFIG['ssh_port'], target_ip, ds_data['identifier'])]).split('\n')
         lv_disks = []
         for line in lvs_output:
             lv_disks.append(line.split()[0])
@@ -633,7 +632,8 @@ def checkDataStore(target_id):
         logger("Adding all LVM disk sizes together. ")
         if VERBOSE: print "Adding all LVM disk sizes together"
         lv_sizes = []
-        for n in runCmd("lvs -o LV_SIZE --noheadings --units g --nosuffix").split(): lv_sizes.append(float(n))
+        for n in runCmd(['su', 'onapp', '-c', "ssh -p{0} root@{1} lvs {2} -o LV_SIZE --noheadings --units g --nosuffix"]).format(ONAPP_CONFIG['ssh_port'], target_ip, ds_data['identifier']).split():
+            lv_sizes.append(float(n))
         # lv_sizes = [ float(n) for n in runCmd("lvs -o LV_SIZE --noheadings --units g --nosuffix").split() ]
         lv_size_sum = sum(lv_sizes)
         if VERBOSE: print "Total size: {0}g".format(lv_size_sum)
