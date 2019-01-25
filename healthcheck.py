@@ -444,8 +444,8 @@ def checkHVBSStatus(target):
         del vm_list[0]
         for t in vm_list:
             # print "t = ", t
-            if "Domain-0" not in t or "STORAGENODE" not in t:
-                running_vms.append(t.split()[1])
+            if "Domain-0" not in t and "STORAGENODE" not in t:
+                running_vms.append(t.split()[0])
         # vm_list = [ x for x in vm_list if 'Domain-0' not in x ]
         # vm_list = [ t.split()[0] for t in vm_list if "STORAGENODE" not in t.split()[1] ]
     cloned_hvvms = copy(hv_vms)
@@ -566,6 +566,7 @@ def chassisCheck(target=False):
 def diskHWCheck(target=False):
     #list_disks_cmd = "lsblk -n -d -e 1,7,11 -oNAME"
     list_disks_cmd = "lsblk -dn -oNAME -I8,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135"
+    udev_cmd = "bash -c 'eval $(udevadm info --export --query=property --path=/sys/class/block/{0}) && echo $ID_VENDOR - $ID_MODEL'"
     disk_data = {}
     if target is False:
         disks = runCmd(list_disks_cmd, shlexy=False, shell=True).split('\n')
@@ -702,7 +703,7 @@ def checkBackups(target):
     bs_data = dpsql("SELECT id, ip_address, capacity FROM backup_servers WHERE id={0}".format(target))
     backups_in_db = dsql("SELECT identifier FROM backups WHERE backup_server_id={0}".format(target), unlist=False)
     backups_on_server_fullpath = runCmd(['su', 'onapp', '-c', 'ssh -p{0} root@{1} "ls -d -1 {2}/[a-z]/[a-z0-9]/* 2>/dev/null || echo FAIL"'.format(ONAPP_CONFIG['ssh_port'], bs_data['ip_address'], ONAPP_CONFIG['backups_path'])]).split('\n')
-    if backups_on_server_fullpath == ['FAIL'] or backups_on_server_fullpath == '':
+    if backups_on_server_fullpath == ['FAIL'] or backups_on_server_fullpath == '' or backups_on_server_fullpath == 'FAIL':
         return False
     backups_on_server = []
     for line in backups_on_server_fullpath:
