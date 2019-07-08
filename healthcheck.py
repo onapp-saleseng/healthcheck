@@ -54,6 +54,13 @@ except ImportError:
         print "Couldn't install/import MySQL. Please run `yum -y install MySQL-python`."
         raise
 
+##Get Onapp Version as well for certain things
+ONAPP_VER = runCmd('rpm -qa onapp-cp').lstrip('onapp-cp-').rstrip('.noarch').split('-')[0];
+ONAPP_VER_SPLIT = ONAPP_VER.split('.');
+ONAPP_VER_MAJOR = int(ONAPP_VER_SPLIT[0]);
+ONAPP_VER_MINOR = int(ONAPP_VER_SPLIT[1]);
+ONAPP_VER_REVIS = int(ONAPP_VER_SPLIT[2]);
+
 arp = argparse.ArgumentParser(prog='healthcheck', description='Health check for OnApp')
 # arp.add_argument('-a', '--api', help='Enable API', action='store_true')
 arp.add_argument('-v', '--verbose', help='Output more info while running', action='store_true', default=False)
@@ -315,24 +322,48 @@ stapi = storageAPICall;
 
 HOSTS={'IS':{}, 'ALL':{}, 'ZONES':{}}
 
-HOSTS['IS']['HVS'] = dpsql( \
-"SELECT id, host_id, label, ip_address, hypervisor_type \
-FROM hypervisors \
-WHERE hypervisor_type IN ('kvm','xen') \
-AND ip_address IS NOT NULL \
-AND host_id IS NOT NULL \
-AND enabled=1 AND ip_address NOT IN \
-  (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) \
-ORDER BY id", unlist=False )
+if ONAPP_VER_MAJOR >= 6 and ONAPP_VER_MINOR >= 1:
+    HOSTS['IS']['HVS'] = dpsql( \
+    "SELECT hv.id, iss.host_id, hv.label, hv.ip_address, hv.hypervisor_type \
+    FROM hypervisors AS hv \
+    JOIN integrated_storage_settings AS iss ON hv.id=iss.parent_id \
+    AND iss.parent_type='Hypervisor' \
+    WHERE hv.hypervisor_type IN ('kvm','xen') \
+    AND hv.ip_address IS NOT NULL \
+    AND iss.host_id IS NOT NULL \
+    AND hv.enabled=1 AND hv.ip_address NOT IN \
+      (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) \
+    ORDER BY hv.id", unlist=False )
 
-HOSTS['IS']['BSS'] = dpsql( \
-"SELECT id, host_id, label, ip_address, 'backup' as hypervisor_type \
-FROM hypervisors \
-WHERE ip_address IS NOT NULL \
-AND host_id IS NOT NULL \
-AND enabled=1 AND ip_address IN \
-  (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) \
-ORDER BY id", unlist=False )
+    HOSTS['IS']['BSS'] = dpsql( \
+    "SELECT hv.id, iss.host_id, hv.label, hv.ip_address, 'backup' as hypervisor_type \
+    FROM hypervisors AS hv \
+    JOIN integrated_storage_settings AS iss ON hv.id=iss.parent_id \
+    AND iss.parent_type='BackupSrver' \
+    WHERE ip_address IS NOT NULL \
+    AND host_id IS NOT NULL \
+    AND enabled=1 AND ip_address IN \
+      (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) \
+    ORDER BY id", unlist=False )
+else:
+    HOSTS['IS']['HVS'] = dpsql( \
+    "SELECT id, host_id, label, ip_address, hypervisor_type \
+    FROM hypervisors \
+    WHERE hypervisor_type IN ('kvm','xen') \
+    AND ip_address IS NOT NULL \
+    AND host_id IS NOT NULL \
+    AND enabled=1 AND ip_address NOT IN \
+      (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) \
+    ORDER BY id", unlist=False )
+
+    HOSTS['IS']['BSS'] = dpsql( \
+    "SELECT id, host_id, label, ip_address, 'backup' as hypervisor_type \
+    FROM hypervisors \
+    WHERE ip_address IS NOT NULL \
+    AND host_id IS NOT NULL \
+    AND enabled=1 AND ip_address IN \
+      (SELECT ip_address FROM backup_servers WHERE ip_address IS NOT NULL) \
+    ORDER BY id", unlist=False )
 
 HOSTS['ALL']['HVS'] = dpsql( \
 "SELECT id, label, ip_address, hypervisor_type \
@@ -349,28 +380,50 @@ FROM backup_servers \
 WHERE ip_address IS NOT NULL  \
 AND enabled=1 ORDER BY id", unlist=False)
 
-q = "SELECT DISTINCT p.id FROM packs AS p \
+HV_ZONES = "SELECT DISTINCT p.id FROM packs AS p \
 JOIN hypervisors AS hv ON hv.hypervisor_group_id=p.id \
 WHERE p.type='HypervisorGroup' \
 GROUP BY p.id \
 HAVING count(hv.id) > 0;"
 
-for zid in dsql(q, unlist=False):
-    HOSTS['ZONES'][zid] = dpsql("SELECT label FROM packs WHERE id={0}".format(zid), unlist=False)
-    HOSTS['ZONES'][zid]['HV'] = {}
-    for hvid in dsql("SELECT id FROM hypervisors WHERE hypervisor_group_id={0} AND enabled=1".format(zid), unlist=False):
-        HOSTS['ZONES'][zid]['HV'][hvid] = dpsql( \
-            "SELECT id, host_id, label, ip_address, hypervisor_type \
-             FROM hypervisors WHERE id={0}".format(hvid) )
-    bsids = dsql("SELECT backup_server_id FROM backup_server_joins WHERE \
-        target_join_type='HypervisorGroup' AND target_join_id={0}".format(zid), unlist=False)
-    HOSTS['ZONES'][zid]['BS'] = {};
-    if bsids:
-        for bsid in bsids:
-            HOSTS['ZONES'][zid]['BS'][bsid] = dpsql("SELECT id, label, ip_address, 'backup' as hypervisor_type \
-                FROM backup_servers WHERE id={0}".format(bsid));
-            HOSTS['ZONES'][zid]['BS'][bsid]['host_id'] = dsql("SELECT host_id FROM hypervisors WHERE ip_address='{0}'" \
-                     .format(HOSTS['ZONES'][zid]['BS'][bsid]['ip_address']))
+
+if ONAPP_VER_MAJOR >= 6 and ONAPP_VER_MINOR >= 1:
+    for zid in dsql(HV_ZONES, unlist=False):
+        HOSTS['ZONES'][zid] = dpsql("SELECT label FROM packs WHERE id={0}".format(zid), unlist=False)
+        HOSTS['ZONES'][zid]['HV'] = {}
+        for hvid in dsql("SELECT id FROM hypervisors WHERE hypervisor_group_id={0} AND enabled=1".format(zid), unlist=False):
+            HOSTS['ZONES'][zid]['HV'][hvid] = dpsql( \
+                "SELECT hv.id, iss.host_id, hv.label, hv.ip_address, hv.hypervisor_type \
+                 FROM hypervisors AS hv JOIN integrated_storage_settings AS iss ON hv.id=iss.parent_id \
+                 WHERE hv.id={0}".format(hvid) )
+        bsids = dsql("SELECT backup_server_id FROM backup_server_joins WHERE \
+            target_join_type='HypervisorGroup' AND target_join_id={0}".format(zid), unlist=False)
+        HOSTS['ZONES'][zid]['BS'] = {};
+        if bsids:
+            for bsid in bsids:
+                HOSTS['ZONES'][zid]['BS'][bsid] = dpsql("SELECT id, label, ip_address, 'backup' as hypervisor_type \
+                    FROM backup_servers WHERE id={0}".format(bsid));
+                HOSTS['ZONES'][zid]['BS'][bsid]['host_id'] = dsql("SELECT iss.host_id \
+                    FROM hypervisors AS hv JOIN integrated_storage_settings AS iss ON hv.id=iss.parent_id \
+                    WHERE hv.ip_address='{0}'" \
+                         .format(HOSTS['ZONES'][zid]['BS'][bsid]['ip_address']))
+else:
+    for zid in dsql(HV_ZONES, unlist=False):
+        HOSTS['ZONES'][zid] = dpsql("SELECT label FROM packs WHERE id={0}".format(zid), unlist=False)
+        HOSTS['ZONES'][zid]['HV'] = {}
+        for hvid in dsql("SELECT id FROM hypervisors WHERE hypervisor_group_id={0} AND enabled=1".format(zid), unlist=False):
+            HOSTS['ZONES'][zid]['HV'][hvid] = dpsql( \
+                "SELECT id, host_id, label, ip_address, hypervisor_type \
+                 FROM hypervisors WHERE id={0}".format(hvid) )
+        bsids = dsql("SELECT backup_server_id FROM backup_server_joins WHERE \
+            target_join_type='HypervisorGroup' AND target_join_id={0}".format(zid), unlist=False)
+        HOSTS['ZONES'][zid]['BS'] = {};
+        if bsids:
+            for bsid in bsids:
+                HOSTS['ZONES'][zid]['BS'][bsid] = dpsql("SELECT id, label, ip_address, 'backup' as hypervisor_type \
+                    FROM backup_servers WHERE id={0}".format(bsid));
+                HOSTS['ZONES'][zid]['BS'][bsid]['host_id'] = dsql("SELECT host_id FROM hypervisors WHERE ip_address='{0}'" \
+                         .format(HOSTS['ZONES'][zid]['BS'][bsid]['ip_address']))
 
 
 
